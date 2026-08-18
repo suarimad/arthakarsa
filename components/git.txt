@@ -1,0 +1,13 @@
+git pull > tarik repositori online
+git checkout -b fitur-navigasi > buat branch baru
+(penyesuaian fitur)
+git status > lihat posisi branch
+git add . > menandai semua perubahan file
+git commit -m "Memperbarui struktur dan tampilan navigasi" > simpan lokal
+git push -u origin fitur-navigasi > upload branch ke repositori online
+git checkout main > pindah ke branch utama
+git merge fitur-navigasi > merge branch
+git push > upload lokal ke repositori online
+
+
+npx @tailwindcss/cli -i ./src/input.css -o ./css/output.css --minify

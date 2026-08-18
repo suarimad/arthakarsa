@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Lokasi pemindaian file PHP (relatif dari folder assets/css) */
+@source "../../*.php";
+@source "../../components/**/*.php";
+
+/* Konfigurasi Warna & Font Tailwind v4 */
+@theme {
+  --font-poppins: 'Poppins', sans-serif;
+  
+  --color-primary: var(--color-primary, #ea3800);
+  --color-secondary: #4b5563;
+  --color-accent: #ff5c28;
+  --color-surface: #ffffff;
+  --color-background: #f3f4f6;
+  --color-pending: #f59e0b;
+  --color-success: #10b981;
+  --color-failed: #ef4444;
+  --color-warning: #eab308;
+}
+
+body {
+    font-family: var(--font-poppins);
+    -webkit-tap-highlight-color: transparent;
+}
+::-webkit-scrollbar {
+    display: none;
+}

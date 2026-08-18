@@ -1,0 +1,12 @@
+# File Sensitif (Jangan sampai ter-commit)
+.env
+
+# Dependencies Node.js
+node_modules/
+npm-debug.log*
+
+# System & IDE files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
