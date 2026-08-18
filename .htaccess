@@ -2,3 +2,15 @@
     Order allow,deny
     Deny from all
 </Files>
+
+RewriteEngine On
+
+# 1. EXTERNAL REDIRECT: Paksa hapus .php jika diketik langsung di browser
+# (Menangkap URL sebelum ekstensi .php dan membelokkannya)
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s([^.]+)\.php [NC]
+RewriteRule ^ %1 [R=301,L]
+
+# 2. INTERNAL REWRITE: Cari file .php di belakang layar jika URL tanpa ekstensi dipanggil
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [L]
