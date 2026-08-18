@@ -11,3 +11,4 @@ git push > upload lokal ke repositori online
 
 
 npx @tailwindcss/cli -i ./src/input.css -o ./css/output.css --minify
+npm run build
