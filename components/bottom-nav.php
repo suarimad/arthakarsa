@@ -34,7 +34,7 @@ if ($current_page == '') $current_page = 'index';
         </a>
         
         <!-- 5. Profile -->
-        <a href="#" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
+        <a href="profile" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
             <i data-lucide="user" class="w-5 h-5"></i>
             <span class="text-[9px] <?= ($current_page == 'profile') ? 'font-semibold' : 'font-medium' ?>">Profile</span>
         </a>

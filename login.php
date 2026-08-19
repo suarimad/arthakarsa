@@ -3,15 +3,6 @@
 require_once __DIR__ . '/config/config.php';
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
-// Cek Toast dari PHP Auth/Register
-$toast_msg = '';
-$toast_type = '';
-if (isset($_SESSION['toast_msg'])) {
-    $toast_msg = $_SESSION['toast_msg'];
-    $toast_type = $_SESSION['toast_type'] ?? 'info';
-    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
-}
-
 // Redirect ke dashboard jika sudah login
 if (isset($_SESSION['user_id'])) {
     header("Location: index");
@@ -50,12 +41,6 @@ if (isset($_SESSION['user_id'])) {
         <p class="text-xs font-semibold text-gray-700 md:text-surface">Memproses data...</p>
     </div>
 
-    <!-- Toast Component -->
-    <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-        <i id="toastIcon" class="w-4 h-4"></i>
-        <span id="toastMsg"></span>
-    </div>
-
     <!-- Wrapper Responsif: Tidak ada background/box di mobile, berbentuk box di desktop -->
     <div class="w-full max-w-sm bg-transparent md:bg-surface px-6 py-8 md:p-8 rounded-none md:rounded-3xl shadow-none md:shadow-sm border-none md:border md:border-gray-100">
         <div class="text-center mb-8">
@@ -90,38 +75,11 @@ if (isset($_SESSION['user_id'])) {
         </p>
     </div>
 
+    <!-- 1. Memanggil Komponen Toast secara Global -->
+    <?php require_once __DIR__ . '/components/toast.php'; ?>
+
     <script>
         lucide.createIcons();
-
-        // Sistem Toast Global
-        function showToast(msg, type) {
-            const toast = document.getElementById('toast');
-            const msgEl = document.getElementById('toastMsg');
-            const iconEl = document.getElementById('toastIcon');
-
-            msgEl.textContent = msg;
-            toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium'; // Reset classes
-
-            if (type === 'failed' || type === 'error') {
-                toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-                iconEl.setAttribute('data-lucide', 'alert-circle');
-            } else if (type === 'warning') {
-                toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-                iconEl.setAttribute('data-lucide', 'alert-triangle');
-            } else {
-                toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-                iconEl.setAttribute('data-lucide', 'check-circle');
-            }
-            lucide.createIcons();
-
-            setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-            setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-        }
-
-        // Tampilkan toast dari PHP (Auth Guard/Register) jika ada
-        const phpMsg = <?= json_encode($toast_msg) ?>;
-        const phpType = <?= json_encode($toast_type) ?>;
-        if (phpMsg) showToast(phpMsg, phpType);
 
         // Proses AJAX Form
         document.getElementById('loginForm').addEventListener('submit', function(e) {
@@ -139,18 +97,24 @@ if (isset($_SESSION['user_id'])) {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showToast(data.message, 'success');
-                    setTimeout(() => { window.location.href = 'index'; }, 1000); // Redirect via route bersih
+                    // Karena login_process.php sudah menset Session Toast,
+                    // Kita cukup mengalihkan halaman, toast akan diurus oleh index.php
+                    setTimeout(() => { window.location.href = 'index'; }, 500); 
                 } else {
                     overlay.classList.add('hidden'); // Matikan loading jika gagal
                     overlay.classList.remove('flex');
-                    showToast(data.message, data.status);
+                    // Tampilkan pesan error langsung di halaman ini menggunakan fungsi dari toast.php
+                    if(typeof showToast === 'function') {
+                        showToast(data.message, data.status);
+                    }
                 }
             })
             .catch(err => {
                 overlay.classList.add('hidden');
                 overlay.classList.remove('flex');
-                showToast('Terjadi kesalahan koneksi', 'error');
+                if(typeof showToast === 'function') {
+                    showToast('Terjadi kesalahan koneksi', 'error');
+                }
             });
         });
     </script>

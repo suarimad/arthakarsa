@@ -1,7 +1,7 @@
 const CACHE_NAME = 'hris-pwa-v1';
 const urlsToCache = [
     '/',
-    '/index.php'
+    '/index'
 ];
 
 self.addEventListener('install', event => {

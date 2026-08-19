@@ -37,12 +37,6 @@ if (isset($_SESSION['user_id'])) {
         <p class="text-xs font-semibold text-gray-700 md:text-surface">Membuat akun tenant...</p>
     </div>
 
-    <!-- Toast Component -->
-    <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-        <i id="toastIcon" class="w-4 h-4"></i>
-        <span id="toastMsg"></span>
-    </div>
-
     <div class="w-full max-w-sm bg-transparent md:bg-surface px-6 py-8 md:p-8 rounded-none md:rounded-3xl shadow-none md:shadow-sm border-none md:border md:border-gray-100 my-8 md:my-0">
         <div class="text-center mb-8">
             <!-- Menampilkan Logo Aplikasi Dinamis -->
@@ -89,32 +83,11 @@ if (isset($_SESSION['user_id'])) {
         </p>
     </div>
 
+    <!-- 1. Memanggil Komponen Toast secara Global -->
+    <?php require_once __DIR__ . '/components/toast.php'; ?>
+
     <script>
         lucide.createIcons();
-
-        function showToast(msg, type) {
-            const toast = document.getElementById('toast');
-            const msgEl = document.getElementById('toastMsg');
-            const iconEl = document.getElementById('toastIcon');
-
-            msgEl.textContent = msg;
-            toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-            if (type === 'failed' || type === 'error') {
-                toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-                iconEl.setAttribute('data-lucide', 'alert-circle');
-            } else if (type === 'warning') {
-                toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-                iconEl.setAttribute('data-lucide', 'alert-triangle');
-            } else {
-                toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-                iconEl.setAttribute('data-lucide', 'check-circle');
-            }
-            lucide.createIcons();
-
-            setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-            setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-        }
 
         document.getElementById('registerForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -131,18 +104,23 @@ if (isset($_SESSION['user_id'])) {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Redirect ke login, pesan sukses akan ditangkap oleh PHP Auth Guard
-                    setTimeout(() => { window.location.href = 'login'; }, 1000);
+                    // Redirect ke login, pesan sukses akan ditangkap oleh session dari proses register
+                    setTimeout(() => { window.location.href = 'login'; }, 500);
                 } else {
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
-                    showToast(data.message, data.status);
+                    // Panggil fungsi toast global
+                    if(typeof window.showToast === 'function') {
+                        window.showToast(data.message, data.status);
+                    }
                 }
             })
             .catch(err => {
                 overlay.classList.add('hidden');
                 overlay.classList.remove('flex');
-                showToast('Terjadi kesalahan koneksi', 'error');
+                if(typeof window.showToast === 'function') {
+                    window.showToast('Terjadi kesalahan koneksi', 'error');
+                }
             });
         });
     </script>
