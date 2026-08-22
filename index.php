@@ -236,7 +236,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- ================= MODAL ABSENSI (GPS & KAMERA) ================= -->
 <div id="attendanceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
-    <!-- Overlay (Bisa diklik untuk menutup) -->
+    <!-- Overlay -->
     <div id="attendanceOverlay" onclick="closeAttendance()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <!-- Modal Container -->
@@ -263,8 +263,8 @@ require_once __DIR__ . '/components/sidebar.php';
                     <div class="flex items-start gap-2">
                         <i data-lucide="map-pin" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
                         <div class="flex-1 min-w-0">
-                            <p class="text-[10px] text-white/70 font-medium mb-0.5">Status Lokasi</p>
-                            <p id="locationStatus" class="text-xs text-white font-semibold leading-tight animate-pulse">Mencari kordinat GPS...</p>
+                            <p class="text-[10px] text-white/70 font-medium mb-1 border-b border-white/10 pb-1">Lokasi Anda Saat Ini</p>
+                            <p id="locationStatus" class="text-[11px] text-white font-medium leading-relaxed animate-pulse">Mencari kordinat GPS...</p>
                         </div>
                     </div>
                 </div>
@@ -383,8 +383,8 @@ require_once __DIR__ . '/components/sidebar.php';
         const now = new Date();
         attTime.innerText = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' WIB';
 
-        locStatus.innerText = "Mencari lokasi akurat...";
-        locStatus.className = "text-xs text-white font-semibold leading-tight animate-pulse";
+        locStatus.innerHTML = "Mencari kordinat GPS...";
+        locStatus.className = "text-[11px] text-white font-medium leading-relaxed animate-pulse";
         btnCapture.disabled = true;
         attLat.value = "";
         attLng.value = "";
@@ -405,7 +405,7 @@ require_once __DIR__ . '/components/sidebar.php';
             })
             .catch(function(err) {
                 if(typeof showToast === 'function') showToast('Akses kamera ditolak atau tidak tersedia.', 'error');
-                locStatus.innerText = "Kamera tidak aktif!";
+                locStatus.innerHTML = "Kamera tidak aktif!";
                 locStatus.classList.remove('animate-pulse');
                 locStatus.classList.add('text-failed');
             });
@@ -427,34 +427,40 @@ require_once __DIR__ . '/components/sidebar.php';
                             const distance = getDistanceFromLatLonInM(currentLat, currentLng, officeLat, officeLng);
                             const distanceRounded = Math.round(distance);
                             
+                            // Menampilkan Informasi Koordinat Target vs User secara langsung
+                            let statusText = `
+                                Target: <b>${officeName}</b> (${parseFloat(officeLat).toFixed(4)}, ${parseFloat(officeLng).toFixed(4)})<br>
+                                Anda: ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}<br>
+                            `;
+
                             if (distance > officeRadius) {
-                                locStatus.innerHTML = `Di luar radius <b>${officeName}</b>. Jarak: ${distanceRounded}m (Maks: ${officeRadius}m)`;
+                                statusText += `<span class="text-failed font-bold block mt-1">Jarak: ${distanceRounded}m (Batas: ${officeRadius}m) - Ditolak</span>`;
+                                locStatus.innerHTML = statusText;
                                 locStatus.classList.remove('animate-pulse');
-                                locStatus.classList.add('text-failed');
                                 btnCapture.disabled = true; // Kunci tombol jika di luar radius
                             } else {
-                                locStatus.innerHTML = `Di dalam area <b>${officeName}</b>. Jarak: ${distanceRounded}m`;
+                                statusText += `<span class="text-success font-bold block mt-1">Jarak: ${distanceRounded}m - Valid</span>`;
+                                locStatus.innerHTML = statusText;
                                 locStatus.classList.remove('animate-pulse');
-                                locStatus.classList.add('text-success');
                                 btnCapture.disabled = false; // Buka kunci tombol
                             }
                         } else {
                             // User belum di-assign ke lokasi mana pun padahal mode strict aktif
-                            locStatus.innerHTML = `Lokasi kantor belum di-assign. Hubungi HRD!`;
+                            locStatus.innerHTML = `Lokasi kantor belum di-assign ke akun Anda. Silakan hubungi HRD!`;
                             locStatus.classList.remove('animate-pulse');
                             locStatus.classList.add('text-failed');
                             btnCapture.disabled = true;
                         }
                     } else {
                         // Jika Mode Bebas (WFA)
-                        locStatus.innerHTML = `GPS Terkunci: Mode Absen WFA`;
+                        locStatus.innerHTML = `GPS Terkunci: Mode Absen WFA Bebas Lokasi`;
                         locStatus.classList.remove('animate-pulse');
                         locStatus.classList.add('text-success');
                         btnCapture.disabled = false;
                     }
                 },
                 function(error) {
-                    locStatus.innerText = "Gagal mendapatkan lokasi GPS";
+                    locStatus.innerHTML = "Gagal mendapatkan lokasi GPS dari perangkat ini.";
                     locStatus.classList.remove('animate-pulse');
                     locStatus.classList.add('text-failed');
                     if(typeof showToast === 'function') showToast('Akses lokasi (GPS) ditolak.', 'error');
@@ -462,7 +468,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         } else {
-            locStatus.innerText = "GPS tidak didukung browser ini";
+            locStatus.innerHTML = "GPS tidak didukung browser ini";
             locStatus.classList.remove('animate-pulse');
             locStatus.classList.add('text-failed');
         }
