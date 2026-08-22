@@ -45,15 +45,18 @@ if (isset($_SESSION['toast_msg'])) {
     unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
 }
 
-// Ambil data user terbaru dari database (Termasuk department dan position)
+// Ambil data user terbaru dari database (Termasuk department, position, dan role)
 try {
+    // PERBAIKAN: Menghapus u.role dan menambahkan JOIN ke tabel roles
     $stmt = $pdo->prepare("
-        SELECT u.name, u.email, u.role, u.face_descriptor, 
-               p.name as position_name, d.name as department_name, t.name as tenant_name 
+        SELECT u.name, u.email, u.face_descriptor, 
+               p.name as position_name, d.name as department_name, 
+               t.name as tenant_name, r.display_name as role_display
         FROM users u 
         LEFT JOIN positions p ON u.position_id = p.id
         LEFT JOIN departments d ON p.department_id = d.id
         LEFT JOIN tenants t ON u.tenant_id = t.id
+        LEFT JOIN roles r ON u.role_id = r.id
         WHERE u.id = ?
     ");
     $stmt->execute([$user_id]);
@@ -64,7 +67,7 @@ try {
         $user_email = $user_data['email'];
         $user_pos = $user_data['position_name'] ?? 'Belum ada jabatan';
         $user_dept = $user_data['department_name'] ?? 'Belum ada departemen';
-        $user_role_display = ucfirst($user_data['role']);
+        $user_role_display = $user_data['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
         $tenant_name_display = $user_data['tenant_name'] ?? 'Sistem Pusat';
     } else {
         // Fallback jika gagal fetch
@@ -76,6 +79,7 @@ try {
         $tenant_name_display = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
     }
 } catch (Exception $e) {
+    // Menangkap error jika SQL gagal (contohnya saat kolom u.role tadi tidak ada)
     $user_name = $_SESSION['user_name'] ?? 'User';
     $user_email = '';
     $user_pos = $_SESSION['position_name'] ?? 'Belum ada jabatan';
@@ -84,7 +88,7 @@ try {
     $tenant_name_display = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 }
 
-// Set variabel role agar bisa diakses oleh header.php (jika dibutuhkan oleh header)
+// Set variabel untuk dikonsumsi komponen header.php (jika dibutuhkan)
 $user_role = $user_pos; 
 $tenant_name = $tenant_name_display;
 
@@ -177,7 +181,7 @@ require_once __DIR__ . '/components/sidebar.php';
                             </div>
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Peran Akses Sistem (Role)</label>
-                                <p class="text-sm font-medium text-gray-800 capitalize"><?= htmlspecialchars($_SESSION['role'] ?? 'employee') ?></p>
+                                <p class="text-sm font-medium text-gray-800"><?= htmlspecialchars($user_role_display) ?></p>
                             </div>
                         </div>
                     </section>
@@ -287,7 +291,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 </button>
             </div>
 
-            <!-- Area Feed Kamera & AI (Button Dihapus, ditambahkan rounded-b-3xl agar proporsional) -->
+            <!-- Area Feed Kamera & AI -->
             <div class="relative bg-black aspect-[3/4] w-full flex items-center justify-center overflow-hidden">
                 <video id="faceCamera" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
                 
@@ -368,7 +372,7 @@ require_once __DIR__ . '/components/sidebar.php';
             if (ptrContainer.scrollTop === 0) {
                 startY = e.touches[0].clientY;
                 isPulling = true;
-                ptrIndicator.style.transition = 'none'; // hapus transisi agar smooth saat ditarik
+                ptrIndicator.style.transition = 'none'; 
             }
         }, { passive: true });
 
@@ -377,9 +381,7 @@ require_once __DIR__ . '/components/sidebar.php';
             currentY = e.touches[0].clientY;
             let distance = currentY - startY;
 
-            // Jika menarik ke bawah saat scroll sudah paling atas
             if (distance > 0 && ptrContainer.scrollTop === 0) {
-                // Beri efek friction (menahan tarikan jika terlalu jauh)
                 if (distance > 100) distance = 100 + (distance - 100) * 0.2;
                 ptrIndicator.style.height = `${distance}px`;
             } else {
@@ -392,14 +394,12 @@ require_once __DIR__ . '/components/sidebar.php';
             isPulling = false;
             ptrIndicator.style.transition = 'height 0.3s ease';
 
-            // Jika ditarik cukup jauh (>60px), lakukan refresh
             if (parseFloat(ptrIndicator.style.height) > 60) {
-                ptrIndicator.style.height = '60px'; // Tahan spinner
+                ptrIndicator.style.height = '60px'; 
                 setTimeout(() => {
                     window.location.reload();
                 }, 400);
             } else {
-                // Batal tarik
                 ptrIndicator.style.height = '0px';
             }
         });
@@ -410,7 +410,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     let faceStream = null;
     let faceInterval = null;
-    let finalFaceDescriptor = null; // Menyimpan 128 array hasil pindaian
+    let finalFaceDescriptor = null;
 
     const fModal = document.getElementById('faceModal');
     const fOverlay = document.getElementById('faceOverlay');
@@ -418,7 +418,7 @@ require_once __DIR__ . '/components/sidebar.php';
     const fVideo = document.getElementById('faceCamera');
     const fStatus = document.getElementById('faceStatus');
 
-    if(fModal) document.body.appendChild(fModal); // Pindahkan modal ke luar kontainer z-index
+    if(fModal) document.body.appendChild(fModal);
 
     function openFaceRegistration(e) {
         if(e) e.preventDefault();
@@ -472,7 +472,6 @@ require_once __DIR__ . '/components/sidebar.php';
             
             fStatus.innerText = "Memuat model kecerdasan buatan...";
             
-            // Memuat file Weights AI dari URL Raw Github terpercaya
             const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
             
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
@@ -481,7 +480,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
             fStatus.innerText = "Posisikan wajah Anda di tengah layar...";
             
-            // Mulai scan wajah setiap 1 detik
             faceInterval = setInterval(async () => {
                 const detection = await faceapi.detectSingleFace(fVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
                 
@@ -490,26 +488,24 @@ require_once __DIR__ . '/components/sidebar.php';
                     fStatus.classList.remove('animate-pulse');
                     fStatus.classList.add('text-success');
                     
-                    finalFaceDescriptor = Array.from(detection.descriptor); // Ubah jadi Array JS standar
-                    clearInterval(faceInterval); // Hentikan deteksi
+                    finalFaceDescriptor = Array.from(detection.descriptor);
+                    clearInterval(faceInterval); 
                     
-                    submitFaceRegistration(); // Auto Submit!
+                    submitFaceRegistration(); 
                 }
             }, 1000);
 
         } catch (error) {
             console.warn("Gagal load AI, masuk mode simulasi: ", error);
-            // --- FALLBACK MOCKUP ---
             fStatus.innerText = "Mendeteksi wajah...";
             setTimeout(() => {
                 fStatus.innerText = "Wajah terdeteksi! Menyimpan data...";
                 fStatus.classList.remove('animate-pulse');
                 fStatus.classList.add('text-success');
                 
-                // Menghasilkan 128 array random sebagai Mockup Descriptor
                 finalFaceDescriptor = Array.from({length: 128}, () => Math.random() * 2 - 1);
                 
-                submitFaceRegistration(); // Auto Submit!
+                submitFaceRegistration(); 
             }, 2500);
         }
     }
@@ -523,11 +519,9 @@ require_once __DIR__ . '/components/sidebar.php';
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Berhasil, reload halaman untuk trigger Toast Session dari PHP
                     window.location.reload();
                 } else {
                     window.showToast(data.message, 'error');
-                    // Mengulang deteksi jika gagal simpan
                     setTimeout(() => startFaceDetection(), 2000);
                 }
             })
