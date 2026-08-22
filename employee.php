@@ -50,19 +50,44 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// 1. QUERY UTAMA: SEMUA KARYAWAN
-$stmt = $pdo->prepare("
+// ==========================================
+// DETEKSI DEPARTEMEN USER SAAT INI
+// ==========================================
+$stmtMe = $pdo->prepare("
+    SELECT u.department_id, d.name as department_name 
+    FROM users u 
+    LEFT JOIN departments d ON u.department_id = d.id 
+    WHERE u.id = ? AND u.tenant_id = ?
+");
+$stmtMe->execute([$user_id, $tenant_id]);
+$me = $stmtMe->fetch(PDO::FETCH_ASSOC);
+
+$my_dept_id = $me['department_id'] ?? null;
+$my_dept_name = $me['department_name'] ?? 'Semua Departemen';
+
+// 1. QUERY UTAMA: KARYAWAN (SATU DEPARTEMEN)
+$sql_main = "
     SELECT u.id, u.uuid, u.name, u.email, u.whatsapp, u.avatar, 
            r.name as role_name, r.display_name as role_display, 
            p.name as position_name, d.name as department_name 
     FROM users u 
     LEFT JOIN positions p ON u.position_id = p.id
-    LEFT JOIN departments d ON p.department_id = d.id
+    LEFT JOIN departments d ON u.department_id = d.id
     LEFT JOIN roles r ON u.role_id = r.id
     WHERE u.tenant_id = ? AND u.deleted_at IS NULL
-    ORDER BY u.name ASC
-");
-$stmt->execute([$tenant_id]);
+";
+$params_main = [$tenant_id];
+
+// Jika user punya departemen, filter hanya teman satu departemen
+if ($my_dept_id) {
+    $sql_main .= " AND u.department_id = ?";
+    $params_main[] = $my_dept_id;
+}
+
+$sql_main .= " ORDER BY u.name ASC";
+
+$stmt = $pdo->prepare($sql_main);
+$stmt->execute($params_main);
 $all_employees = $stmt->fetchAll();
 
 $currentUser = null;
@@ -76,22 +101,35 @@ foreach ($all_employees as $emp) {
     }
 }
 
-// 2. QUERY DINAMIS: KARYAWAN YANG TIDAK MASUK HARI INI
+// 2. QUERY DINAMIS: KARYAWAN YANG TIDAK MASUK HARI INI (SATU DEPARTEMEN)
 $today_date = date('Y-m-d');
-$stmtAbsent = $pdo->prepare("
+$sql_absent = "
     SELECT u.id, u.name, u.avatar 
     FROM users u 
     WHERE u.tenant_id = ? 
       AND u.deleted_at IS NULL 
       AND u.id != ? 
+";
+$params_absent = [$tenant_id, $user_id];
+
+// Filter teman satu departemen untuk status absen
+if ($my_dept_id) {
+    $sql_absent .= " AND u.department_id = ?";
+    $params_absent[] = $my_dept_id;
+}
+
+$sql_absent .= "
       AND NOT EXISTS (
           SELECT 1 FROM attendances a 
           WHERE a.user_id = u.id AND a.date = ?
       )
     ORDER BY u.name ASC
     LIMIT 10
-");
-$stmtAbsent->execute([$tenant_id, $user_id, $today_date]);
+";
+$params_absent[] = $today_date;
+
+$stmtAbsent = $pdo->prepare($sql_absent);
+$stmtAbsent->execute($params_absent);
 $absentEmployees = $stmtAbsent->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/components/head.php';
@@ -129,10 +167,13 @@ require_once __DIR__ . '/components/sidebar.php';
                 <input type="text" id="searchInput" placeholder="Cari nama, email, atau jabatan..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
 
-            <!-- STORY IG STYLE: Teman yang Tidak Masuk -->
+            <!-- STORY IG STYLE: Teman yang Tidak Masuk (Dinamis & Terfilter Dept) -->
             <?php if(!empty($absentEmployees)): ?>
             <section class="mb-2 relative z-0">
-                <h3 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-3 px-1 uppercase tracking-wider">Tidak Masuk Hari Ini</h3>
+                <h3 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-3 px-1 uppercase tracking-wider">
+                    Tidak Masuk Hari Ini 
+                    <span class="text-[9px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded ml-1 normal-case capitalize"><?= htmlspecialchars($my_dept_name) ?></span>
+                </h3>
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
                     <?php foreach($absentEmployees as $absent): 
                         $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($absent['name']);
@@ -176,7 +217,10 @@ require_once __DIR__ . '/components/sidebar.php';
 
                     <section class="relative z-0">
                         <div class="flex justify-between items-center mb-3 px-1">
-                            <h3 class="text-xs md:text-sm font-semibold text-gray-800">Rekan Kerja</h3>
+                            <h3 class="text-xs md:text-sm font-semibold text-gray-800">
+                                Rekan Kerja 
+                                <span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded ml-1"><?= htmlspecialchars($my_dept_name) ?></span>
+                            </h3>
                             <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" id="employeeCount"><?= count($otherEmployees) ?> orang</span>
                         </div>
                         
@@ -221,7 +265,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                         <i data-lucide="users" class="w-6 h-6"></i>
                                     </div>
                                     <h4 class="text-sm font-bold text-gray-800">Belum ada rekan kerja</h4>
-                                    <p class="text-xs text-gray-500 mt-1 max-w-xs mx-auto">Hanya Anda yang berada di tenant ini. Undang karyawan lain untuk mulai berkolaborasi.</p>
+                                    <p class="text-xs text-gray-500 mt-1 max-w-xs mx-auto">Hanya Anda yang berada di departemen ini.</p>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -444,7 +488,7 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 
     // ==========================================
-    // SEARCH AJAX
+    // SEARCH AJAX (Menembus Batas Departemen)
     // ==========================================
     let searchTimeout;
     const searchInput = document.getElementById('searchInput');
