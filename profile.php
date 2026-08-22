@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         ");
         $stmt->execute([$face_descriptor_json, $user_id, $tenant_id]);
         
+        // Set Toast ke Session untuk dimunculkan setelah reload
         $_SESSION['toast_msg'] = "Wajah berhasil didaftarkan!";
         $_SESSION['toast_type'] = "success";
         echo json_encode(['status' => 'success']);
@@ -84,7 +85,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- MAIN CONTENT AREA -->
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-28 md:pb-8 md:px-6">
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-28 md:pb-8 md:px-6 relative z-0">
         
         <!-- 3. Load Komponen Header (Navigasi Atas) -->
         <?php require_once __DIR__ . '/components/header.php'; ?>
@@ -94,25 +95,25 @@ require_once __DIR__ . '/components/sidebar.php';
             <span id="toastMsg"></span>
         </div>
 
-        <!-- PAGE CONTENT -->
-        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2">
+        <!-- PAGE CONTENT (Ditambahkan relative z-0 agar tidak menimpa header) -->
+        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
                 <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Profil Saya</h2>
             </div>
 
-            <div class="md:grid md:grid-cols-3 md:gap-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6 relative z-0">
                 
                 <!-- Kiri (2 Kolom di Desktop): PROFIL & DETAIL -->
-                <div class="md:col-span-2 space-y-5 md:space-y-6">
+                <div class="md:col-span-2 space-y-5 md:space-y-6 relative z-0">
                     
                     <!-- KARTU PROFIL UTAMA -->
-                    <section class="bg-surface border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left relative overflow-hidden">
+                    <section class="bg-surface border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left relative overflow-hidden z-0">
                         <!-- Dekorasi Background -->
-                        <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none -z-0"></div>
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none -z-10"></div>
                         
                         <!-- Avatar -->
-                        <div class="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-surface shadow-md relative z-2 shrink-0">
+                        <div class="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-surface shadow-md relative z-10 shrink-0">
                             <img src="https://ui-avatars.com/api/?name=<?= urlencode($user_name) ?>&background=<?= str_replace('#', '', $app_settings['theme_color'] ?? 'ea3800') ?>&color=fff&size=150&rounded=true" alt="Profile" class="w-full h-full rounded-full object-cover">
                             <!-- Tombol Edit Avatar (Visual saja) -->
                             <button class="absolute bottom-0 right-0 w-8 h-8 bg-primary text-surface rounded-full flex items-center justify-center border-2 border-surface shadow-sm hover:scale-105 transition">
@@ -131,7 +132,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     </section>
 
                     <!-- DETAIL AKUN -->
-                    <section class="bg-surface border border-gray-100 rounded-3xl shadow-sm overflow-hidden">
+                    <section class="bg-surface border border-gray-100 rounded-3xl shadow-sm overflow-hidden relative z-0">
                         <div class="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
                             <h3 class="text-sm font-semibold text-gray-800">Informasi Pribadi</h3>
                             <button class="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1">
@@ -157,10 +158,10 @@ require_once __DIR__ . '/components/sidebar.php';
                 </div>
 
                 <!-- Kanan (1 Kolom di Desktop): PENGATURAN & LOGOUT -->
-                <div class="md:col-span-1 mt-5 md:mt-0 space-y-5 md:space-y-6">
+                <div class="md:col-span-1 mt-5 md:mt-0 space-y-5 md:space-y-6 relative z-0">
                     
                     <!-- MENU PENGATURAN -->
-                    <section class="bg-surface border border-gray-100 rounded-3xl shadow-sm overflow-hidden">
+                    <section class="bg-surface border border-gray-100 rounded-3xl shadow-sm overflow-hidden relative z-0">
                         <div class="px-5 py-4 border-b border-gray-50">
                             <h3 class="text-sm font-semibold text-gray-800">Pengaturan</h3>
                         </div>
@@ -228,7 +229,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     </section>
 
                     <!-- TOMBOL LOGOUT -->
-                    <a href="logout" class="w-full bg-surface border border-failed/30 text-failed text-sm font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-failed hover:text-surface transition shadow-sm group">
+                    <a href="logout" class="w-full bg-surface border border-failed/30 text-failed text-sm font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-failed hover:text-surface transition shadow-sm group relative z-0">
                         <i data-lucide="log-out" class="w-4 h-4 group-hover:-translate-x-1 transition-transform"></i> Keluar Aplikasi
                     </a>
 
@@ -254,12 +255,12 @@ require_once __DIR__ . '/components/sidebar.php';
                     <h3 class="text-sm font-bold text-gray-800">Daftarkan Wajah</h3>
                     <p class="text-[10px] text-gray-500 font-medium">Pastikan cahaya di sekitar Anda cukup</p>
                 </div>
-                <button onclick="closeFaceRegistration()" class="text-gray-400 hover:text-failed hover:bg-failed/10 transition p-1.5 rounded-full">
+                <button onclick="closeFaceRegistration()" class="text-gray-400 hover:text-failed hover:bg-failed/10 transition p-1.5 rounded-full z-10">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
 
-            <!-- Area Feed Kamera & AI -->
+            <!-- Area Feed Kamera & AI (Button Dihapus, ditambahkan rounded-b-3xl agar proporsional) -->
             <div class="relative bg-black aspect-[3/4] w-full flex items-center justify-center overflow-hidden">
                 <video id="faceCamera" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
                 
@@ -273,13 +274,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
                 </div>
             </div>
-
-            <!-- Area Tombol -->
-            <div class="p-5">
-                <button id="btnSubmitFace" onclick="submitFaceRegistration()" disabled class="w-full bg-primary text-surface py-3.5 rounded-xl text-sm font-bold flex justify-center items-center gap-2 hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i data-lucide="scan-face" class="w-5 h-5"></i> Simpan Wajah
-                </button>
-            </div>
+            
         </div>
     </div>
 </div>
@@ -356,12 +351,13 @@ require_once __DIR__ . '/components/sidebar.php';
         setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
     }
 
+    // Eksekusi Toast Session PHP Jika Ada
     const phpMsg = <?= json_encode($toast_msg) ?>;
     const phpType = <?= json_encode($toast_type) ?>;
     if (phpMsg) showToast(phpMsg, phpType);
 
     // ==========================================
-    // LOGIKA PENDAFTARAN WAJAH (FACE API JS)
+    // LOGIKA PENDAFTARAN WAJAH OTOMATIS (FACE API JS)
     // ==========================================
     let faceStream = null;
     let faceInterval = null;
@@ -372,7 +368,6 @@ require_once __DIR__ . '/components/sidebar.php';
     const fCard = document.getElementById('faceCard');
     const fVideo = document.getElementById('faceCamera');
     const fStatus = document.getElementById('faceStatus');
-    const fBtn = document.getElementById('btnSubmitFace');
 
     if(fModal) document.body.appendChild(fModal); // Pindahkan modal ke luar kontainer z-index
 
@@ -381,7 +376,6 @@ require_once __DIR__ . '/components/sidebar.php';
         
         fStatus.innerText = "Mengakses kamera...";
         fStatus.className = "text-xs text-white font-semibold leading-tight animate-pulse";
-        fBtn.disabled = true;
         finalFaceDescriptor = null;
 
         fModal.classList.remove('hidden');
@@ -429,7 +423,7 @@ require_once __DIR__ . '/components/sidebar.php';
             
             fStatus.innerText = "Memuat model kecerdasan buatan...";
             
-            // Memuat file Weights AI dari URL Raw Github terpercaya (Bisa dipindah ke server lokal Anda)
+            // Memuat file Weights AI dari URL Raw Github terpercaya
             const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
             
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
@@ -443,38 +437,35 @@ require_once __DIR__ . '/components/sidebar.php';
                 const detection = await faceapi.detectSingleFace(fVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
                 
                 if (detection) {
-                    fStatus.innerText = "Wajah terdeteksi! Silakan simpan.";
+                    fStatus.innerText = "Wajah terdeteksi! Menyimpan data...";
                     fStatus.classList.remove('animate-pulse');
                     fStatus.classList.add('text-success');
-                    fBtn.disabled = false;
                     
                     finalFaceDescriptor = Array.from(detection.descriptor); // Ubah jadi Array JS standar
-                    clearInterval(faceInterval); // Hentikan deteksi jika sudah dapat
+                    clearInterval(faceInterval); // Hentikan deteksi
+                    
+                    submitFaceRegistration(); // Auto Submit!
                 }
             }, 1000);
 
         } catch (error) {
             console.warn("Gagal load AI, masuk mode simulasi: ", error);
             // --- FALLBACK MOCKUP ---
-            // Jika koneksi CDN ke model AI gagal, kita jalankan simulasi otomatis agar UI tidak stuck
             fStatus.innerText = "Mendeteksi wajah...";
             setTimeout(() => {
-                fStatus.innerText = "Wajah terdeteksi! Silakan simpan.";
+                fStatus.innerText = "Wajah terdeteksi! Menyimpan data...";
                 fStatus.classList.remove('animate-pulse');
                 fStatus.classList.add('text-success');
-                fBtn.disabled = false;
                 
                 // Menghasilkan 128 array random sebagai Mockup Descriptor
                 finalFaceDescriptor = Array.from({length: 128}, () => Math.random() * 2 - 1);
+                
+                submitFaceRegistration(); // Auto Submit!
             }, 2500);
         }
     }
 
     function submitFaceRegistration() {
-        fBtn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Menyimpan Wajah...';
-        fBtn.disabled = true;
-        lucide.createIcons();
-
         const formData = new FormData();
         formData.append('action', 'register_face');
         formData.append('face_descriptor', JSON.stringify(finalFaceDescriptor));
@@ -483,18 +474,17 @@ require_once __DIR__ . '/components/sidebar.php';
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    closeFaceRegistration();
+                    // Berhasil, reload halaman untuk trigger Toast Session dari PHP
                     window.location.reload();
                 } else {
                     showToast(data.message, 'error');
-                    fBtn.innerHTML = '<i data-lucide="scan-face" class="w-5 h-5"></i> Simpan Wajah';
-                    fBtn.disabled = false;
+                    // Mengulang deteksi jika gagal simpan
+                    setTimeout(() => startFaceDetection(), 2000);
                 }
             })
             .catch(() => {
                 showToast('Gagal terhubung ke server', 'error');
-                fBtn.innerHTML = '<i data-lucide="scan-face" class="w-5 h-5"></i> Simpan Wajah';
-                fBtn.disabled = false;
+                setTimeout(() => startFaceDetection(), 2000);
             });
     }
 
