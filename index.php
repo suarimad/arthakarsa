@@ -210,13 +210,20 @@ require_once __DIR__ . '/components/sidebar.php';
 ?>
 
 <!-- MAIN CONTENT AREA -->
-<div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6">
+<div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6 relative">
         
+        <!-- PULL TO REFRESH INDICATOR (Tampil saat ditarik di mobile) -->
+        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-50">
+            <div class="bg-surface rounded-full shadow-md p-2 flex items-center justify-center mt-2">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-primary animate-spin"></i>
+            </div>
+        </div>
+
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
         <!-- DASHBOARD CONTENT -->
-        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2">
+        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-10">
             <div class="md:grid md:grid-cols-3 md:gap-6">
                 
                 <!-- Kiri (2 Kolom di Desktop) -->
@@ -386,6 +393,35 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
+<!-- ================= MODAL PERINGATAN WAJAH BELUM TERDAFTAR ================= -->
+<div id="faceWarningModal" class="fixed inset-0 hidden" style="z-index: 99999;">
+    <!-- Overlay -->
+    <div id="faceWarningOverlay" onclick="closeFaceWarning()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    
+    <!-- Modal Container -->
+    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
+        <div id="faceWarningCard" class="bg-surface w-full max-w-sm rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col p-6 text-center">
+            
+            <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeFaceWarning()">
+                <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <div class="w-16 h-16 bg-failed/10 text-failed rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="scan-face" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-base font-bold text-gray-800 mb-2">Wajah Belum Terdaftar</h3>
+            <p class="text-xs text-gray-500 mb-6 leading-relaxed">Sistem mendeteksi Anda belum mendaftarkan wajah. Silakan daftarkan wajah Anda terlebih dahulu di Profil untuk menggunakan fitur absensi otomatis.</p>
+            
+            <a href="profile" class="w-full bg-primary text-surface py-3.5 rounded-xl text-sm font-bold flex justify-center items-center gap-2 hover:opacity-90 transition shadow-sm active:scale-95">
+                <i data-lucide="user" class="w-5 h-5"></i> Daftarkan Wajah
+            </a>
+            <button onclick="closeFaceWarning()" class="w-full mt-3 py-3 bg-gray-50 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition active:scale-95">
+                Nanti Saja
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- ================= MODAL ABSENSI (Otomatis & Liveness) ================= -->
 <div id="attendanceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <!-- Overlay -->
@@ -476,6 +512,57 @@ require_once __DIR__ . '/components/sidebar.php';
     lucide.createIcons();
 
     // ==========================================
+    // PULL TO REFRESH (PWA / Mobile Behavior)
+    // ==========================================
+    const ptrContainer = document.getElementById('main-scroll-container');
+    const ptrIndicator = document.getElementById('ptr-indicator');
+    let startY = 0;
+    let currentY = 0;
+    let isPulling = false;
+
+    if(ptrContainer && ptrIndicator) {
+        ptrContainer.addEventListener('touchstart', (e) => {
+            if (ptrContainer.scrollTop === 0) {
+                startY = e.touches[0].clientY;
+                isPulling = true;
+                ptrIndicator.style.transition = 'none'; // hapus transisi agar smooth saat ditarik
+            }
+        }, { passive: true });
+
+        ptrContainer.addEventListener('touchmove', (e) => {
+            if (!isPulling) return;
+            currentY = e.touches[0].clientY;
+            let distance = currentY - startY;
+
+            // Jika menarik ke bawah saat scroll sudah paling atas
+            if (distance > 0 && ptrContainer.scrollTop === 0) {
+                // Beri efek friction (menahan tarikan jika terlalu jauh)
+                if (distance > 100) distance = 100 + (distance - 100) * 0.2;
+                ptrIndicator.style.height = `${distance}px`;
+            } else {
+                isPulling = false;
+            }
+        }, { passive: true });
+
+        ptrContainer.addEventListener('touchend', () => {
+            if (!isPulling) return;
+            isPulling = false;
+            ptrIndicator.style.transition = 'height 0.3s ease';
+
+            // Jika ditarik cukup jauh (>60px), lakukan refresh
+            if (parseFloat(ptrIndicator.style.height) > 60) {
+                ptrIndicator.style.height = '60px'; // Tahan spinner
+                setTimeout(() => {
+                    window.location.reload();
+                }, 400);
+            } else {
+                // Batal tarik
+                ptrIndicator.style.height = '0px';
+            }
+        });
+    }
+
+    // ==========================================
     // JAM REALTIME
     // ==========================================
     function updateRealtimeClock() {
@@ -491,11 +578,41 @@ require_once __DIR__ . '/components/sidebar.php';
     updateRealtimeClock();
 
     // ==========================================
+    // LOGIKA MODAL PERINGATAN WAJAH
+    // ==========================================
+    function openFaceWarning() {
+        const m = document.getElementById('faceWarningModal');
+        const o = document.getElementById('faceWarningOverlay');
+        const c = document.getElementById('faceWarningCard');
+        
+        m.classList.remove('hidden');
+        setTimeout(() => {
+            o.classList.remove('opacity-0');
+            c.classList.remove('translate-y-full');
+            c.classList.remove('md:scale-95', 'md:opacity-0');
+            c.classList.add('translate-y-0');
+            c.classList.add('md:scale-100', 'md:opacity-100');
+        }, 10);
+    }
+    function closeFaceWarning() {
+        const m = document.getElementById('faceWarningModal');
+        const o = document.getElementById('faceWarningOverlay');
+        const c = document.getElementById('faceWarningCard');
+        
+        o.classList.add('opacity-0');
+        c.classList.remove('translate-y-0');
+        c.classList.remove('md:scale-100', 'md:opacity-100');
+        c.classList.add('translate-y-full');
+        c.classList.add('md:scale-95', 'md:opacity-0');
+        setTimeout(() => { m.classList.add('hidden'); }, 300);
+    }
+
+    // ==========================================
     // LOGIKA ABSENSI (Otomatis: GPS + Face Match)
     // ==========================================
     let cameraStream = null;
     let faceInterval = null;
-    let isProcessing = false; // Double-lock prevent duplicate API calls
+    let isProcessing = false; 
 
     const attModal = document.getElementById('attendanceModal');
     const attOverlay = document.getElementById('attendanceOverlay');
@@ -510,7 +627,6 @@ require_once __DIR__ . '/components/sidebar.php';
     const attTitle = document.getElementById('attendanceTitle');
     const attTime = document.getElementById('attendanceTime');
 
-    // Variabel dari PHP
     const isGeofenceEnabled = <?= $is_geofence_enabled ?>;
     const officeLat = <?= $office_lat !== null ? $office_lat : 'null' ?>;
     const officeLng = <?= $office_lng !== null ? $office_lng : 'null' ?>;
@@ -526,6 +642,8 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 
     document.body.appendChild(attModal);
+    const fwModalElement = document.getElementById('faceWarningModal');
+    if(fwModalElement) document.body.appendChild(fwModalElement);
 
     function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
         var R = 6371000; 
@@ -539,7 +657,8 @@ require_once __DIR__ . '/components/sidebar.php';
 
     function openAttendance(type) {
         if(!savedFaceDescriptor) {
-            window.showToast('Wajah belum terdaftar. Silakan daftar di menu Profil terlebih dahulu!', 'error');
+            // Tampilkan Modal Peringatan
+            openFaceWarning();
             return;
         }
 
