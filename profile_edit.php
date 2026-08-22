@@ -10,7 +10,7 @@ $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
 // ==============================================================================
-// PENANGANAN AJAX: UPDATE FOTO AVATAR (DIPOTONG VIAL CROPPER JS 1:1)
+// PENANGANAN AJAX: UPDATE FOTO AVATAR (DIPOTONG VIA CROPPER JS 1:1)
 // ==============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_avatar') {
     header('Content-Type: application/json');
@@ -119,7 +119,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- MAIN CONTENT AREA -->
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
-    <main class="w-full min-h-screen pb-36 md:pb-8 md:px-6">
+    <main class="w-full min-h-screen pb-8 md:px-6">
         
         <!-- HEADER DESKTOP -->
         <div class="hidden md:block">
@@ -238,7 +238,8 @@ require_once __DIR__ . '/components/sidebar.php';
     </div>
 </div>
 
-<?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
+<!-- Bottom Nav sengaja TIDAK dipanggil agar bersih di layar form edit (mobile) -->
+
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
