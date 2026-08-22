@@ -13,7 +13,7 @@ $user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employe
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
 // ==========================================
-// 1. DATA DINAMIS ABSENSI, AKTIVITAS & SHIFT
+// 1. DATA DINAMIS ABSENSI, AKTIVITAS, SHIFT & LOKASI
 // ==========================================
 
 // Setup Tanggal Hari Ini (Format Indonesia)
@@ -25,6 +25,7 @@ $date_now = $hari[date("w")] . ", " . date("j") . " " . $bulan[date("n")] . " " 
 $shift_start = "--:--";
 $shift_end = "--:--";
 $is_geofence_enabled = 1; // Default strict
+$office_name = null;
 $office_lat = null;
 $office_lng = null;
 $office_radius = 50; // Default radius
@@ -33,7 +34,7 @@ $attendances = [];
 $activities = [];
 
 try {
-    // --- AMBIL PENGATURAN TENANT ---
+    // --- AMBIL PENGATURAN TENANT (MODE GEOFENCE) ---
     $stmtSet = $pdo->prepare("SELECT is_geofence_enabled FROM tenant_settings WHERE tenant_id = ?");
     $stmtSet->execute([$tenant_id]);
     $setting = $stmtSet->fetch(PDO::FETCH_ASSOC);
@@ -41,9 +42,9 @@ try {
         $is_geofence_enabled = (int)$setting['is_geofence_enabled'];
     }
 
-    // --- AMBIL SHIFT & LOKASI USER AKTIF ---
+    // --- AMBIL SHIFT & LOKASI (GEOFENCE) USER AKTIF BERDASARKAN RELASI TABEL ---
     $stmtUser = $pdo->prepare("
-        SELECT s.start, s.end, l.latitude, l.longitude, l.radius 
+        SELECT s.start, s.end, l.name as location_name, l.latitude, l.longitude, l.radius 
         FROM users u 
         LEFT JOIN shifts s ON u.shift_id = s.id 
         LEFT JOIN locations l ON u.location_id = l.id
@@ -58,6 +59,7 @@ try {
             $shift_end = date('H:i', strtotime($userData['end']));
         }
         if ($userData['latitude'] && $userData['longitude']) {
+            $office_name = $userData['location_name'];
             $office_lat = $userData['latitude'];
             $office_lng = $userData['longitude'];
             $office_radius = (int)$userData['radius'];
@@ -75,7 +77,7 @@ try {
     $activities = $stmtAct->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
-    // Fallback Mockup Data
+    // Fallback Mockup Data jika tabel belum lengkap
     $shift_start = "08:00";
     $shift_end = "17:00";
     
@@ -234,7 +236,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- ================= MODAL ABSENSI (GPS & KAMERA) ================= -->
 <div id="attendanceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
-    <!-- Overlay (Sekarang ditambahkan onclick untuk close) -->
+    <!-- Overlay (Bisa diklik untuk menutup) -->
     <div id="attendanceOverlay" onclick="closeAttendance()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <!-- Modal Container -->
@@ -351,11 +353,12 @@ require_once __DIR__ . '/components/sidebar.php';
     const attTitle = document.getElementById('attendanceTitle');
     const attTime = document.getElementById('attendanceTime');
 
-    // Variabel Settings dari PHP
+    // Variabel Settings dari PHP (Tenant & User)
     const isGeofenceEnabled = <?= $is_geofence_enabled ?>;
     const officeLat = <?= $office_lat !== null ? $office_lat : 'null' ?>;
     const officeLng = <?= $office_lng !== null ? $office_lng : 'null' ?>;
     const officeRadius = <?= $office_radius ?>;
+    const officeName = <?= $office_name !== null ? '"'.htmlspecialchars($office_name).'"' : 'null' ?>;
 
     document.body.appendChild(attModal);
 
@@ -408,7 +411,7 @@ require_once __DIR__ . '/components/sidebar.php';
             });
         }
 
-        // Minta Akses GPS dan Eksekusi Geofencing
+        // Minta Akses GPS dan Eksekusi Geofencing spesifik milik user
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 function(position) {
@@ -418,24 +421,32 @@ require_once __DIR__ . '/components/sidebar.php';
                     attLat.value = currentLat;
                     attLng.value = currentLng;
                     
-                    // Logika Geofencing (Settings)
-                    if (isGeofenceEnabled === 1 && officeLat !== null && officeLng !== null) {
-                        const distance = getDistanceFromLatLonInM(currentLat, currentLng, officeLat, officeLng);
-                        const distanceRounded = Math.round(distance);
-                        
-                        if (distance > officeRadius) {
-                            locStatus.innerHTML = `Di luar radius! Jarak: ${distanceRounded}m (Maks: ${officeRadius}m)`;
+                    // Logika Geofencing berdasarkan location_id milik user
+                    if (isGeofenceEnabled === 1) {
+                        if (officeLat !== null && officeLng !== null) {
+                            const distance = getDistanceFromLatLonInM(currentLat, currentLng, officeLat, officeLng);
+                            const distanceRounded = Math.round(distance);
+                            
+                            if (distance > officeRadius) {
+                                locStatus.innerHTML = `Di luar radius <b>${officeName}</b>. Jarak: ${distanceRounded}m (Maks: ${officeRadius}m)`;
+                                locStatus.classList.remove('animate-pulse');
+                                locStatus.classList.add('text-failed');
+                                btnCapture.disabled = true; // Kunci tombol jika di luar radius
+                            } else {
+                                locStatus.innerHTML = `Di dalam area <b>${officeName}</b>. Jarak: ${distanceRounded}m`;
+                                locStatus.classList.remove('animate-pulse');
+                                locStatus.classList.add('text-success');
+                                btnCapture.disabled = false; // Buka kunci tombol
+                            }
+                        } else {
+                            // User belum di-assign ke lokasi mana pun padahal mode strict aktif
+                            locStatus.innerHTML = `Lokasi kantor belum di-assign. Hubungi HRD!`;
                             locStatus.classList.remove('animate-pulse');
                             locStatus.classList.add('text-failed');
-                            btnCapture.disabled = true; // Kunci tombol jika di luar radius
-                        } else {
-                            locStatus.innerHTML = `Dalam radius kantor. Jarak: ${distanceRounded}m`;
-                            locStatus.classList.remove('animate-pulse');
-                            locStatus.classList.add('text-success');
-                            btnCapture.disabled = false; // Buka kunci tombol
+                            btnCapture.disabled = true;
                         }
                     } else {
-                        // Jika Mode Bebas (WFA) atau Karyawan belum diset lokasinya
+                        // Jika Mode Bebas (WFA)
                         locStatus.innerHTML = `GPS Terkunci: Mode Absen WFA`;
                         locStatus.classList.remove('animate-pulse');
                         locStatus.classList.add('text-success');
@@ -466,11 +477,6 @@ require_once __DIR__ . '/components/sidebar.php';
         attCard.classList.remove('scale-100', 'opacity-100');
         attCard.classList.add('scale-95', 'opacity-0');
         setTimeout(() => { attModal.classList.add('hidden'); }, 300);
-    }
-
-    // Tambahkan event listener cadangan untuk overlay jika onclick HTML gagal
-    if (attOverlay) {
-        attOverlay.addEventListener('click', closeAttendance);
     }
 
     function captureAndSubmit() {
