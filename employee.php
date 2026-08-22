@@ -6,6 +6,7 @@ require_once __DIR__ . '/components/auth.php';
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
+// Tangkap session toast
 $toast_msg = '';
 $toast_type = '';
 if (isset($_SESSION['toast_msg'])) {
@@ -51,16 +52,20 @@ require_once __DIR__ . '/components/head.php';
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6">
+<!-- Ditambahkan ID main-scroll-container untuk deteksi scroll Pull to Refresh -->
+<div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6 relative z-0">
         
-        <?php require_once __DIR__ . '/components/header.php'; ?>
-
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
+        <!-- PULL TO REFRESH INDICATOR (Tampil saat ditarik di mobile - Diubah z-0 agar tidak menimpa header) -->
+        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-0">
+            <div class="bg-surface rounded-full shadow-md p-2 flex items-center justify-center mt-2">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-primary animate-spin"></i>
+            </div>
         </div>
 
+        <?php require_once __DIR__ . '/components/header.php'; ?>
+
+        <!-- Diubah z-10 menjadi z-0 agar saat di-scroll konten akan tenggelam ke bawah header -->
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
@@ -81,7 +86,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
             <!-- STORY IG STYLE: Teman yang Tidak Masuk -->
             <?php if(!empty($absentEmployees)): ?>
-            <section class="mb-2">
+            <section class="mb-2 relative z-0">
                 <h3 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-3 px-1 uppercase tracking-wider">Tidak Masuk Hari Ini</h3>
                 <!-- Menyembunyikan Scrollbar namun tetap bisa di-swipe -->
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
@@ -97,7 +102,7 @@ require_once __DIR__ . '/components/sidebar.php';
             </section>
             <?php endif; ?>
 
-            <div class="md:grid md:grid-cols-3 md:gap-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6 relative z-0">
                 <div class="md:col-span-3 space-y-5 md:space-y-6">
                     
                     <?php if($currentUser): ?>
@@ -112,7 +117,6 @@ require_once __DIR__ . '/components/sidebar.php';
                         
                         <div class="relative z-10 flex-1 min-w-0">
                             <h3 class="text-base md:text-xl font-bold tracking-tight truncate"><?= htmlspecialchars($currentUser['name']) ?> <span class="text-xs font-medium bg-surface/20 px-2 py-0.5 rounded-md ml-1 inline-block align-middle">Anda</span></h3>
-                            <!-- PENYESUAIAN: Membaca role_display -->
                             <p class="text-xs text-surface/80 mt-0.5 font-medium truncate"><?= htmlspecialchars($currentUser['position_name'] ?? $currentUser['role_display'] ?? ucfirst($currentUser['role_name'] ?? 'Employee')) ?></p>
                             
                             <div class="mt-3 flex items-center gap-3 text-[10px] md:text-xs text-surface/90 font-medium">
@@ -136,7 +140,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                     
                                     <div class="flex-1 min-w-0">
                                         <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= htmlspecialchars($emp['name']) ?></h4>
-                                        <!-- PENYESUAIAN: Membaca role_display -->
                                         <p class="text-[11px] text-gray-500 font-medium truncate mt-0.5"><?= htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee')) ?></p>
                                         <p class="text-[10px] text-gray-400 truncate mt-1.5 flex items-center gap-1">
                                             <i data-lucide="mail" class="w-3 h-3"></i> <?= htmlspecialchars($emp['email']) ?>
@@ -198,64 +201,97 @@ require_once __DIR__ . '/components/sidebar.php';
     </div>
 </div>
 
+<!-- Load Bottom Nav (Mobile) -->
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
+
+<!-- Panggil Komponen Toast Secara Global -->
+<?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
     lucide.createIcons();
 
-    function showToast(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
+    // ==========================================
+    // PULL TO REFRESH (PWA / Mobile Behavior)
+    // ==========================================
+    const ptrContainer = document.getElementById('main-scroll-container');
+    const ptrIndicator = document.getElementById('ptr-indicator');
+    let startY = 0;
+    let currentY = 0;
+    let isPulling = false;
 
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
+    if(ptrContainer && ptrIndicator) {
+        ptrContainer.addEventListener('touchstart', (e) => {
+            if (ptrContainer.scrollTop === 0) {
+                startY = e.touches[0].clientY;
+                isPulling = true;
+                ptrIndicator.style.transition = 'none'; // hapus transisi agar smooth saat ditarik
+            }
+        }, { passive: true });
 
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
-        }
-        lucide.createIcons();
+        ptrContainer.addEventListener('touchmove', (e) => {
+            if (!isPulling) return;
+            currentY = e.touches[0].clientY;
+            let distance = currentY - startY;
 
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
+            // Jika menarik ke bawah saat scroll sudah paling atas
+            if (distance > 0 && ptrContainer.scrollTop === 0) {
+                // Beri efek friction (menahan tarikan jika terlalu jauh)
+                if (distance > 100) distance = 100 + (distance - 100) * 0.2;
+                ptrIndicator.style.height = `${distance}px`;
+            } else {
+                isPulling = false;
+            }
+        }, { passive: true });
+
+        ptrContainer.addEventListener('touchend', () => {
+            if (!isPulling) return;
+            isPulling = false;
+            ptrIndicator.style.transition = 'height 0.3s ease';
+
+            // Jika ditarik cukup jauh (>60px), lakukan refresh
+            if (parseFloat(ptrIndicator.style.height) > 60) {
+                ptrIndicator.style.height = '60px'; // Tahan spinner
+                setTimeout(() => {
+                    window.location.reload();
+                }, 400);
+            } else {
+                // Batal tarik
+                ptrIndicator.style.height = '0px';
+            }
+        });
     }
 
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) showToast(phpMsg, phpType);
-
-    // Fitur AJAX Search Debounce
+    // ==========================================
+    // FITUR AJAX SEARCH DEBOUNCE
+    // ==========================================
     let searchTimeout;
     const searchInput = document.getElementById('searchInput');
     const container = document.getElementById('employeeListContainer');
 
-    searchInput.addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        const q = this.value;
-        
-        // Render Loading State (Opsional)
-        container.innerHTML = '<div class="col-span-full py-8 text-center"><i data-lucide="loader-2" class="w-6 h-6 text-gray-400 animate-spin mx-auto"></i></div>';
-        lucide.createIcons();
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const q = this.value;
+            
+            // Render Loading State (Opsional)
+            container.innerHTML = '<div class="col-span-full py-8 text-center"><i data-lucide="loader-2" class="w-6 h-6 text-gray-400 animate-spin mx-auto"></i></div>';
+            lucide.createIcons();
 
-        searchTimeout = setTimeout(() => {
-            fetch('employee_search?q=' + encodeURIComponent(q))
-                .then(res => res.text())
-                .then(html => {
-                    container.innerHTML = html;
-                    lucide.createIcons();
-                })
-                .catch(err => console.error("Gagal mengambil data", err));
-        }, 400); // 400ms debounce
-    });
+            searchTimeout = setTimeout(() => {
+                fetch('employee_search?q=' + encodeURIComponent(q))
+                    .then(res => res.text())
+                    .then(html => {
+                        container.innerHTML = html;
+                        lucide.createIcons();
+                    })
+                    .catch(err => console.error("Gagal mengambil data", err));
+            }, 400); // 400ms debounce
+        });
+    }
 
-    // Logika Bottom Sheet (Request)
+    // ==========================================
+    // LOGIKA MODAL REQUEST (BOTTOM SHEET)
+    // ==========================================
     document.addEventListener('DOMContentLoaded', () => {
         const requestBtn = document.getElementById('requestBtn');
         const bottomSheet = document.getElementById('requestBottomSheet');
