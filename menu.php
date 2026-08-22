@@ -9,7 +9,9 @@ require_once __DIR__ . '/components/auth.php';
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
-$role_key = strtolower($_SESSION['role'] ?? 'employee'); // Kunci untuk logika menu dinamis
+
+// Identifikasi Role String untuk kondisional menu
+$role_name_session = strtolower($_SESSION['role'] ?? '');
 
 // 1. Load Head (Metadata & CSS)
 require_once __DIR__ . '/components/head.php';
@@ -20,24 +22,23 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- MAIN CONTENT AREA -->
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6">
+    <!-- Diubah pb-36 agar menu terbawah tidak tertutup bottom navigation di mobile -->
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-36 md:pb-8 md:px-6">
         
         <!-- 3. Load Komponen Header (Navigasi Atas) -->
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
         <!-- PAGE CONTENT -->
-        <div class="px-5 md:px-0 mt-2 pb-8">
+        <div class="px-5 md:px-0 space-y-6 mt-2 relative z-0">
             
             <!-- ============================================== -->
-            <!-- SECTION 1: EKSPLORASI FITUR (UNTUK SEMUA ROLE) -->
+            <!-- SECTION 1: MENU UMUM (EKSPLORASI FITUR) -->
             <!-- ============================================== -->
-            <div class="space-y-4 md:space-y-6">
-                <!-- Judul -->
-                <div class="flex justify-between items-center px-1">
+            <div>
+                <div class="flex justify-between items-center px-1 mb-3">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Eksplorasi Fitur</h2>
                 </div>
 
-                <!-- GRID MENU BOX -->
                 <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
                     <!-- Grid 4 kolom di mobile, 6 di tablet, 8 di desktop -->
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
@@ -111,67 +112,72 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <!-- ============================================== -->
-            <!-- SECTION 2: ADMIN MENU (ROLE 1 & 2)             -->
+            <!-- SECTION 2: ADMIN MENU (Khusus Admin/Superadmin)-->
             <!-- ============================================== -->
-            <?php if (in_array($role_key, ['admin', 'superadmin'])): ?>
-            <div class="space-y-4 md:space-y-6 mt-8">
-                <!-- Judul -->
-                <div class="flex justify-between items-center px-1">
+            <?php if (in_array($role_name_session, ['admin', 'superadmin'])): ?>
+            <div>
+                <div class="flex justify-between items-center px-1 mb-3">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Admin Menu</h2>
                 </div>
 
-                <!-- GRID MENU BOX -->
                 <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
+                        <a href="setting_company" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
                                 <i data-lucide="building" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Perusahaan</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Perusahaan</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
+                        <a href="setting_app" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
                                 <i data-lucide="settings" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Aplikasi</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Aplikasi</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
+                        <a href="department" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
                                 <i data-lucide="network" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Department</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Department</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="award" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="position" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="user-cog" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Posisi</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Posisi</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
+                        <a href="location" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
                                 <i data-lucide="map-pin" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Lokasi</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Lokasi</span>
                         </a>
 
-                        <!-- Tambahan Ide Menu Admin -->
+                        <!-- Placeholder Tambahan -->
                         <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="calendar-clock" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="clock" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Jadwal Shift</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Data Shift</span>
                         </a>
 
                         <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="shield-check" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="shield" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Hak Akses</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Role Akses</span>
+                        </a>
+
+                        <a href="#" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="server" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            </div>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Tenant DB</span>
                         </a>
 
                     </div>
@@ -180,53 +186,44 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php endif; ?>
 
             <!-- ============================================== -->
-            <!-- SECTION 3: HR MENU (ROLE 3)                    -->
+            <!-- SECTION 3: HR MENU (Khusus HR)                 -->
             <!-- ============================================== -->
-            <?php if ($role_key === 'hr'): ?>
-            <div class="space-y-4 md:space-y-6 mt-8">
-                <!-- Judul -->
-                <div class="flex justify-between items-center px-1">
+            <?php if ($role_name_session === 'hr'): ?>
+            <div>
+                <div class="flex justify-between items-center px-1 mb-3">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">HR Menu</h2>
                 </div>
 
-                <!-- GRID MENU BOX -->
                 <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
                         <a href="hr_payslip" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
                                 <i data-lucide="file-text" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Slip Gaji</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Slip Gaji</span>
                         </a>
 
-                        <!-- Tambahan Ide Menu HR -->
-                        <a href="employee" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="users" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <!-- Placeholder Tambahan -->
+                        <a href="#" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="file-spreadsheet" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Karyawan</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Rekap<br>Absensi</span>
                         </a>
 
                         <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="clipboard-check" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="check-square" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Rekap<br>Absensi</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Approval<br>Cuti</span>
                         </a>
 
                         <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="calendar-check" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="hand-coins" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Approval<br>Cuti</span>
-                        </a>
-
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="wallet" class="w-5 h-5 md:w-6 md:h-6"></i>
-                            </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Kasbon</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Kasbon<br>Karyawan</span>
                         </a>
 
                     </div>
@@ -235,46 +232,44 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php endif; ?>
 
             <!-- ============================================== -->
-            <!-- SECTION 4: MANAGER MENU (ROLE 4)               -->
+            <!-- SECTION 4: MANAGER MENU (Khusus Manager)       -->
             <!-- ============================================== -->
-            <?php if ($role_key === 'manager'): ?>
-            <div class="space-y-4 md:space-y-6 mt-8">
-                <!-- Judul -->
-                <div class="flex justify-between items-center px-1">
+            <?php if ($role_name_session === 'manager'): ?>
+            <div>
+                <div class="flex justify-between items-center px-1 mb-3">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Manager Menu</h2>
                 </div>
 
-                <!-- GRID MENU BOX -->
                 <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
                         <a href="review" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="star" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="star-half" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Employee<br>Review</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Employee<br>Review</span>
                         </a>
 
-                        <!-- Tambahan Ide Menu Manager -->
+                        <!-- Placeholder Tambahan -->
                         <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="calendar-check" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="check-circle" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Cuti Tim</span>
-                        </a>
-
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="clock" class="w-5 h-5 md:w-6 md:h-6"></i>
-                            </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Lembur Tim</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Approval<br>Tim</span>
                         </a>
 
                         <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="trending-up" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="pie-chart" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary">Kinerja Tim</span>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Laporan<br>Proyek</span>
+                        </a>
+
+                        <a href="#" class="flex flex-col items-center gap-2.5 group">
+                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
+                                <i data-lucide="timer" class="w-5 h-5 md:w-6 md:h-6"></i>
+                            </div>
+                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Timesheet<br>Tim</span>
                         </a>
 
                     </div>
