@@ -116,9 +116,9 @@ require_once __DIR__ . '/components/sidebar.php';
             
             <!-- Judul & Back Button (Menggunakan url ../../employee karena depth URL kita sekarang bertambah) -->
             <div class="flex items-center gap-3 px-1 mb-6">
-                <a href="../../employee" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
+                <!-- <a href="../../employee" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
-                </a>
+                </a> -->
                 <div>
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight leading-tight">Edit Karyawan</h2>
                     <p class="text-[11px] text-gray-500">Ubah data untuk <?= htmlspecialchars($editUser['name']) ?>.</p>
