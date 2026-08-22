@@ -17,7 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     try {
         $face_descriptor_json = $_POST['face_descriptor']; 
         
-        // Simpan ke database
         $stmt = $pdo->prepare("
             UPDATE users 
             SET face_descriptor = ?, face_registered_at = CURRENT_TIMESTAMP 
@@ -25,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         ");
         $stmt->execute([$face_descriptor_json, $user_id, $tenant_id]);
         
-        // Set Toast ke Session untuk dimunculkan setelah reload
         $_SESSION['toast_msg'] = "Wajah berhasil didaftarkan!";
         $_SESSION['toast_type'] = "success";
         echo json_encode(['status' => 'success']);
@@ -45,10 +43,10 @@ if (isset($_SESSION['toast_msg'])) {
     unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
 }
 
-// Ambil data user terbaru dari database (Termasuk department, position, dan role)
+// Ambil data user terbaru dari database (Termasuk avatar)
 try {
     $stmt = $pdo->prepare("
-        SELECT u.name, u.email, u.face_descriptor, 
+        SELECT u.name, u.email, u.face_descriptor, u.avatar, 
                p.name as position_name, d.name as department_name, 
                t.name as tenant_name, r.display_name as role_display
         FROM users u 
@@ -64,56 +62,54 @@ try {
     if ($user_data) {
         $user_name = $user_data['name'];
         $user_email = $user_data['email'];
+        $user_avatar = $user_data['avatar']; // Avatar diambil dari database
         $user_pos = $user_data['position_name'] ?? 'Belum ada jabatan';
         $user_dept = $user_data['department_name'] ?? 'Belum ada departemen';
         $user_role_display = $user_data['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
         $tenant_name_display = $user_data['tenant_name'] ?? 'Sistem Pusat';
     } else {
-        // Fallback jika gagal fetch
         $user_name = $_SESSION['user_name'] ?? 'User';
         $user_email = '';
+        $user_avatar = $_SESSION['avatar'] ?? null;
         $user_pos = $_SESSION['position_name'] ?? 'Belum ada jabatan';
         $user_dept = 'Belum ada departemen';
         $user_role_display = ucfirst($_SESSION['role'] ?? 'Employee');
         $tenant_name_display = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
     }
 } catch (Exception $e) {
-    // Menangkap error jika SQL gagal
     $user_name = $_SESSION['user_name'] ?? 'User';
     $user_email = '';
+    $user_avatar = $_SESSION['avatar'] ?? null;
     $user_pos = $_SESSION['position_name'] ?? 'Belum ada jabatan';
     $user_dept = 'Belum ada departemen';
     $user_role_display = ucfirst($_SESSION['role'] ?? 'Employee');
     $tenant_name_display = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 }
 
-// Set variabel untuk dikonsumsi komponen header.php (jika dibutuhkan)
+// Set URL Profile Avatar Utama
+$profile_avatar_url = !empty($user_avatar) 
+    ? "assets/img/avatars/" . htmlspecialchars($user_avatar) 
+    : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($user_name);
+
+// Set variabel untuk dikonsumsi komponen header.php
 $user_role = $user_pos; 
 $tenant_name = $tenant_name_display;
 
-// 1. Load Head
 require_once __DIR__ . '/components/head.php';
-
-// 2. Load Sidebar (Desktop)
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<!-- MAIN CONTENT AREA (Ditambahkan ID untuk Pull to Refresh) -->
 <div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <!-- Diubah pb-48 agar bottom nav benar-benar tidak menutupi tombol logout di mobile -->
     <main class="w-full bg-surface md:bg-transparent min-h-screen pb-48 md:pb-8 md:px-6 relative z-0">
         
-        <!-- PULL TO REFRESH INDICATOR (Tampil saat ditarik di mobile, z-0 agar tidak menimpa header) -->
         <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-0">
             <div class="bg-surface rounded-full shadow-md p-2 flex items-center justify-center mt-2">
                 <i data-lucide="refresh-cw" class="w-5 h-5 text-primary animate-spin"></i>
             </div>
         </div>
 
-        <!-- 3. Load Komponen Header (Navigasi Atas) -->
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <!-- PAGE CONTENT (Ditambahkan relative z-0 agar tidak menimpa header saat di-scroll) -->
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
@@ -122,17 +118,15 @@ require_once __DIR__ . '/components/sidebar.php';
 
             <div class="md:grid md:grid-cols-3 md:gap-6 relative z-0">
                 
-                <!-- Kiri (2 Kolom di Desktop): PROFIL & DETAIL -->
                 <div class="md:col-span-2 space-y-5 md:space-y-6 relative z-0">
                     
                     <!-- KARTU PROFIL UTAMA -->
                     <section class="bg-surface border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left relative overflow-hidden z-0">
-                        <!-- Dekorasi Background -->
                         <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none -z-10"></div>
                         
-                        <!-- Avatar -->
-                        <div class="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-surface shadow-md relative z-10 shrink-0">
-                            <img src="https://ui-avatars.com/api/?name=<?= urlencode($user_name) ?>&background=<?= str_replace('#', '', $app_settings['theme_color'] ?? 'ea3800') ?>&color=fff&size=150&rounded=true" alt="Profile" class="w-full h-full rounded-full object-cover">
+                        <!-- Avatar Profile -->
+                        <div class="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-surface shadow-md relative z-10 shrink-0 bg-gray-50">
+                            <img src="<?= $profile_avatar_url ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
                             <!-- Tombol Edit Avatar (Visual saja) -->
                             <button class="absolute bottom-0 right-0 w-8 h-8 bg-primary text-surface rounded-full flex items-center justify-center border-2 border-surface shadow-sm hover:scale-105 transition">
                                 <i data-lucide="camera" class="w-4 h-4"></i>
@@ -187,17 +181,14 @@ require_once __DIR__ . '/components/sidebar.php';
 
                 </div>
 
-                <!-- Kanan (1 Kolom di Desktop): PENGATURAN & LOGOUT -->
                 <div class="md:col-span-1 mt-5 md:mt-0 space-y-5 md:space-y-6 relative z-0">
                     
-                    <!-- MENU PENGATURAN -->
                     <section class="bg-surface border border-gray-100 rounded-3xl shadow-sm overflow-hidden relative z-0">
                         <div class="px-5 py-4 border-b border-gray-50">
                             <h3 class="text-sm font-semibold text-gray-800">Pengaturan</h3>
                         </div>
                         <div class="divide-y divide-gray-50">
                             
-                            <!-- LOGIKA: MENAMPILKAN MENU PENDAFTARAN WAJAH JIKA BELUM TERDAFTAR -->
                             <?php if(empty($user_data['face_descriptor'])): ?>
                                 <a href="#" onclick="openFaceRegistration(event)" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                     <div class="flex items-center gap-3">
@@ -264,22 +255,16 @@ require_once __DIR__ . '/components/sidebar.php';
                     </a>
 
                 </div>
-
             </div>
         </div>
     </main>
 </div>
 
-<!-- ================= MODAL PENDAFTARAN WAJAH ================= -->
+<!-- MODAL PENDAFTARAN WAJAH (Disingkat visualisasinya) -->
 <div id="faceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
-    <!-- Overlay -->
     <div id="faceOverlay" onclick="closeFaceRegistration()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
-
-    <!-- Modal Container -->
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
         <div id="faceCard" class="bg-surface w-full max-w-sm rounded-3xl shadow-2xl transform scale-95 opacity-0 transition-all duration-300 pointer-events-auto relative overflow-hidden flex flex-col">
-
-            <!-- Header Modal -->
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <div>
                     <h3 class="text-sm font-bold text-gray-800">Daftarkan Wajah</h3>
@@ -289,11 +274,8 @@ require_once __DIR__ . '/components/sidebar.php';
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
-
-            <!-- Area Feed Kamera & AI -->
             <div class="relative bg-black aspect-[3/4] w-full flex items-center justify-center overflow-hidden">
                 <video id="faceCamera" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
-                
                 <div class="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10">
                     <div class="flex items-start gap-2">
                         <i data-lucide="scan-face" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
@@ -304,50 +286,11 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
                 </div>
             </div>
-            
         </div>
     </div>
 </div>
 
-<!-- ================= BOTTOM SHEET REQUEST ================= -->
-<div id="requestBottomSheet" class="fixed inset-0 z-50 hidden">
-    <div id="requestOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300"></div>
-    
-    <div id="requestSheet" class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-3xl shadow-2xl transform translate-y-full transition-transform duration-300 ease-in-out pb-safe">
-        <div class="p-5 pb-8 md:max-w-md md:mx-auto">
-            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5"></div>
-            <h3 class="text-sm font-semibold text-gray-800 mb-5 text-center">Buat Pengajuan</h3>
-            
-            <div class="grid grid-cols-3 gap-4">
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
-                    <div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:bg-primary group-hover:text-surface transition shadow-sm">
-                        <i data-lucide="calendar-off" class="w-5 h-5"></i>
-                    </div>
-                    <span class="text-[11px] font-medium text-gray-600">Leave</span>
-                </a>
-                
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
-                    <div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center group-hover:bg-pending group-hover:text-surface transition shadow-sm">
-                        <i data-lucide="stethoscope" class="w-5 h-5"></i>
-                    </div>
-                    <span class="text-[11px] font-medium text-gray-600">Sick</span>
-                </a>
-                
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
-                    <div class="w-12 h-12 bg-success/10 text-success rounded-full flex items-center justify-center group-hover:bg-success group-hover:text-surface transition shadow-sm">
-                        <i data-lucide="clock-4" class="w-5 h-5"></i>
-                    </div>
-                    <span class="text-[11px] font-medium text-gray-600">Overtime</span>
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Load Bottom Nav (Mobile) -->
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
-
-<!-- Panggil Komponen Toast Secara Global (Bawaan) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <!-- Library Kecerdasan Buatan (Face-API.js) -->
@@ -362,9 +305,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     const ptrContainer = document.getElementById('main-scroll-container');
     const ptrIndicator = document.getElementById('ptr-indicator');
-    let startY = 0;
-    let currentY = 0;
-    let isPulling = false;
+    let startY = 0, currentY = 0, isPulling = false;
 
     if(ptrContainer && ptrIndicator) {
         ptrContainer.addEventListener('touchstart', (e) => {
@@ -395,9 +336,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
             if (parseFloat(ptrIndicator.style.height) > 60) {
                 ptrIndicator.style.height = '60px'; 
-                setTimeout(() => {
-                    window.location.reload();
-                }, 400);
+                setTimeout(() => { window.location.reload(); }, 400);
             } else {
                 ptrIndicator.style.height = '0px';
             }
@@ -407,10 +346,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     // LOGIKA PENDAFTARAN WAJAH OTOMATIS (FACE API JS)
     // ==========================================
-    let faceStream = null;
-    let faceInterval = null;
-    let finalFaceDescriptor = null;
-
+    let faceStream = null, faceInterval = null, finalFaceDescriptor = null;
     const fModal = document.getElementById('faceModal');
     const fOverlay = document.getElementById('faceOverlay');
     const fCard = document.getElementById('faceCard');
@@ -421,7 +357,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
     function openFaceRegistration(e) {
         if(e) e.preventDefault();
-        
         fStatus.innerText = "Mengakses kamera...";
         fStatus.className = "text-xs text-white font-semibold leading-tight animate-pulse";
         finalFaceDescriptor = null;
@@ -438,10 +373,7 @@ require_once __DIR__ . '/components/sidebar.php';
             .then(function(stream) {
                 faceStream = stream;
                 fVideo.srcObject = stream;
-                
-                fVideo.onloadedmetadata = () => {
-                    startFaceDetection();
-                };
+                fVideo.onloadedmetadata = () => { startFaceDetection(); };
             })
             .catch(function(err) {
                 if(typeof window.showToast === 'function') window.showToast('Akses kamera ditolak.', 'error');
@@ -458,7 +390,6 @@ require_once __DIR__ . '/components/sidebar.php';
             fVideo.srcObject = null;
         }
         if (faceInterval) clearInterval(faceInterval);
-        
         fOverlay.classList.add('opacity-0');
         fCard.classList.remove('scale-100', 'opacity-100');
         fCard.classList.add('scale-95', 'opacity-0');
@@ -468,28 +399,22 @@ require_once __DIR__ . '/components/sidebar.php';
     async function startFaceDetection() {
         try {
             if(typeof faceapi === 'undefined') throw new Error("Library FaceAPI belum dimuat.");
-            
             fStatus.innerText = "Memuat model kecerdasan buatan...";
             
             const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
-            
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
             await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
             await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
             fStatus.innerText = "Posisikan wajah Anda di tengah layar...";
-            
             faceInterval = setInterval(async () => {
                 const detection = await faceapi.detectSingleFace(fVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-                
                 if (detection) {
                     fStatus.innerText = "Wajah terdeteksi! Menyimpan data...";
                     fStatus.classList.remove('animate-pulse');
                     fStatus.classList.add('text-success');
-                    
                     finalFaceDescriptor = Array.from(detection.descriptor);
                     clearInterval(faceInterval); 
-                    
                     submitFaceRegistration(); 
                 }
             }, 1000);
@@ -501,9 +426,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 fStatus.innerText = "Wajah terdeteksi! Menyimpan data...";
                 fStatus.classList.remove('animate-pulse');
                 fStatus.classList.add('text-success');
-                
                 finalFaceDescriptor = Array.from({length: 128}, () => Math.random() * 2 - 1);
-                
                 submitFaceRegistration(); 
             }, 2500);
         }
@@ -529,44 +452,8 @@ require_once __DIR__ . '/components/sidebar.php';
                 setTimeout(() => startFaceDetection(), 2000);
             });
     }
-
-    // ==========================================
-    // LOGIKA MODAL REQUEST BAWAAN
-    // ==========================================
-    document.addEventListener('DOMContentLoaded', () => {
-        const requestBtn = document.getElementById('requestBtn');
-        const bottomSheet = document.getElementById('requestBottomSheet');
-        const overlay = document.getElementById('requestOverlay');
-        const sheet = document.getElementById('requestSheet');
-
-        if (requestBtn && bottomSheet && overlay && sheet) {
-            function openSheet() {
-                bottomSheet.classList.remove('hidden');
-                setTimeout(() => {
-                    overlay.classList.remove('opacity-0');
-                    sheet.classList.remove('translate-y-full');
-                }, 10);
-            }
-
-            function closeSheet() {
-                overlay.classList.add('opacity-0');
-                sheet.classList.add('translate-y-full');
-                setTimeout(() => {
-                    bottomSheet.classList.add('hidden');
-                }, 300);
-            }
-
-            requestBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                openSheet();
-            });
-
-            overlay.addEventListener('click', closeSheet);
-        }
-    });
 </script>
 
-<!-- Load Script PWA -->
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>
 </body>
 </html>
