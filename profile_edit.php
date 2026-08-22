@@ -37,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Foto profil berhasil diperbarui!',
-                'avatar_url' => 'assets/img/avatars/' . $image_name
+                // PERBAIKAN iOS PWA: Balikkan Absolute Path ke JS
+                'avatar_url' => ($base_url ?? '') . '/assets/img/avatars/' . $image_name
             ]);
         } else {
             echo json_encode(['status' => 'error', 'message' => 'Format gambar tidak valid.']);
@@ -102,8 +103,9 @@ try {
     $tenant_name_display = 'Perusahaan';
 }
 
+// PERBAIKAN iOS PWA: Tambahkan $base_url
 $profile_avatar_url = !empty($user_avatar) 
-    ? "assets/img/avatars/" . htmlspecialchars($user_avatar) 
+    ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($user_avatar) 
     : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($user_name);
 
 $user_role = $user_pos;
@@ -130,7 +132,7 @@ require_once __DIR__ . '/components/sidebar.php';
             
             <!-- Judul & Back Button -->
             <div class="flex items-center gap-3 px-1 mb-6">
-                <a href="profile" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
+                <a href="<?= ($base_url ?? '') ?>/profile" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
                 </a>
                 <div>
@@ -188,7 +190,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
                     <!-- Tombol Aksi -->
                     <div class="mt-8 pt-6 border-t border-gray-100 flex gap-3">
-                        <a href="profile" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold text-center hover:bg-gray-50 transition">
+                        <a href="<?= ($base_url ?? '') ?>/profile" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold text-center hover:bg-gray-50 transition">
                             Batal
                         </a>
                         <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">

@@ -21,9 +21,9 @@ if (empty($header_user_avatar) && isset($pdo) && isset($_SESSION['user_id'])) {
     }
 }
 
-// Generator Avatar Dinamis (Gunakan foto jika ada, fallback ke DiceBear jika kosong)
+// Generator Avatar Dinamis (PERBAIKAN iOS PWA: Tambahkan base_url agar gambar selalu dimuat dengan path absolut)
 if (!empty($header_user_avatar)) {
-    $header_avatar_url = "assets/img/avatars/" . htmlspecialchars($header_user_avatar);
+    $header_avatar_url = ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($header_user_avatar);
 } else {
     $header_avatar_url = "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($header_user_name);
 }
@@ -38,7 +38,7 @@ if (!empty($header_user_avatar)) {
         </button>
 
         <!-- Avatar Mobile -->
-        <a href="profile" class="md:hidden w-10 h-10 rounded-full shadow-sm shrink-0 bg-gray-50 overflow-hidden block">
+        <a href="<?= ($base_url ?? '') ?>/profile" class="md:hidden w-10 h-10 rounded-full shadow-sm shrink-0 bg-gray-50 overflow-hidden block">
             <img src="<?= $header_avatar_url ?>" alt="Profile" class="w-full h-full object-cover">
         </a>
         
@@ -59,7 +59,7 @@ if (!empty($header_user_avatar)) {
         </button>
         
         <!-- Avatar Desktop -->
-        <a href="profile" class="hidden md:block w-10 h-10 rounded-full shadow-sm shrink-0 cursor-pointer hover:opacity-90 transition bg-gray-50 overflow-hidden">
+        <a href="<?= ($base_url ?? '') ?>/profile" class="hidden md:block w-10 h-10 rounded-full shadow-sm shrink-0 cursor-pointer hover:opacity-90 transition bg-gray-50 overflow-hidden">
             <img id="profileDesktopBtn" src="<?= $header_avatar_url ?>" alt="Profile" class="w-full h-full object-cover">
         </a>
     </div>

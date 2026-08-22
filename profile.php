@@ -86,9 +86,9 @@ try {
     $tenant_name_display = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 }
 
-// Set URL Profile Avatar Utama
+// Set URL Profile Avatar Utama (PERBAIKAN iOS PWA: Tambahkan base_url)
 $profile_avatar_url = !empty($user_avatar) 
-    ? "assets/img/avatars/" . htmlspecialchars($user_avatar) 
+    ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($user_avatar) 
     : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($user_name);
 
 // Set variabel untuk dikonsumsi komponen header.php
@@ -146,7 +146,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         <div class="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
                             <h3 class="text-sm font-semibold text-gray-800">Informasi Pribadi</h3>
                             <!-- URL DIUBAH KE profile_edit -->
-                            <a href="profile_edit" class="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1">
+                            <a href="<?= ($base_url ?? '') ?>/profile_edit" class="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1">
                                 <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
                             </a>
                         </div>
@@ -215,7 +215,7 @@ require_once __DIR__ . '/components/sidebar.php';
                             <?php endif; ?>
 
                             <!-- URL DIUBAH KE change_password -->
-                            <a href="change_password" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
+                            <a href="<?= ($base_url ?? '') ?>/change_password" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition">
                                         <i data-lucide="lock" class="w-4 h-4"></i>
@@ -226,7 +226,7 @@ require_once __DIR__ . '/components/sidebar.php';
                             </a>
                             
                             <!-- URL DIUBAH KE setting -->
-                            <a href="setting" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
+                            <a href="<?= ($base_url ?? '') ?>/setting" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition">
                                         <i data-lucide="sliders" class="w-4 h-4"></i>
@@ -237,7 +237,7 @@ require_once __DIR__ . '/components/sidebar.php';
                             </a>
 
                             <!-- URL DIUBAH KE help -->
-                            <a href="help" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
+                            <a href="<?= ($base_url ?? '') ?>/help" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition">
                                         <i data-lucide="help-circle" class="w-4 h-4"></i>
@@ -250,7 +250,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     </section>
 
                     <!-- TOMBOL LOGOUT -->
-                    <a href="logout" class="w-full bg-surface border border-failed/30 text-failed text-sm font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-failed hover:text-surface transition shadow-sm group relative z-0">
+                    <a href="<?= ($base_url ?? '') ?>/logout" class="w-full bg-surface border border-failed/30 text-failed text-sm font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-failed hover:text-surface transition shadow-sm group relative z-0">
                         <i data-lucide="log-out" class="w-4 h-4 group-hover:-translate-x-1 transition-transform"></i> Keluar Aplikasi
                     </a>
 

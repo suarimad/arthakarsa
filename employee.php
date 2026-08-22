@@ -77,7 +77,6 @@ foreach ($all_employees as $emp) {
 }
 
 // 2. QUERY DINAMIS: KARYAWAN YANG TIDAK MASUK HARI INI
-// Mengambil karyawan yang TIDAK ADA datanya di tabel attendances untuk tanggal hari ini
 $today_date = date('Y-m-d');
 $stmtAbsent = $pdo->prepare("
     SELECT u.id, u.name, u.avatar 
@@ -96,7 +95,6 @@ $stmtAbsent->execute([$tenant_id, $user_id, $today_date]);
 $absentEmployees = $stmtAbsent->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/components/head.php';
-// Memasukkan FontAwesome untuk icon WhatsApp
 echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">';
 require_once __DIR__ . '/components/sidebar.php';
 ?>
@@ -131,13 +129,13 @@ require_once __DIR__ . '/components/sidebar.php';
                 <input type="text" id="searchInput" placeholder="Cari nama, email, atau jabatan..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
 
-            <!-- STORY IG STYLE: Teman yang Tidak Masuk (Dinamis dari DB) -->
+            <!-- STORY IG STYLE: Teman yang Tidak Masuk -->
             <?php if(!empty($absentEmployees)): ?>
             <section class="mb-2 relative z-0">
                 <h3 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-3 px-1 uppercase tracking-wider">Tidak Masuk Hari Ini</h3>
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
                     <?php foreach($absentEmployees as $absent): 
-                        $abs_avatar = !empty($absent['avatar']) ? "assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($absent['name']);
+                        $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($absent['name']);
                     ?>
                     <div class="flex flex-col items-center gap-1.5 shrink-0 w-16">
                         <div class="w-14 h-14 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white">
@@ -154,7 +152,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 <div class="md:col-span-3 space-y-5 md:space-y-6">
                     
                     <?php if($currentUser): 
-                        $curr_avatar = !empty($currentUser['avatar']) ? "assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($currentUser['name']);
+                        $curr_avatar = !empty($currentUser['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($currentUser['name']);
                     ?>
                     <section class="bg-primary rounded-2xl p-5 text-surface shadow-md relative z-0 overflow-hidden flex items-center gap-4">
                         <div class="absolute top-0 right-0 opacity-10 pointer-events-none">
@@ -185,7 +183,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         <!-- Kontainer AJAX Render -->
                         <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0 pb-12">
                             <?php foreach($otherEmployees as $emp): 
-                                $emp_avatar = !empty($emp['avatar']) ? "assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($emp['name']);
+                                $emp_avatar = !empty($emp['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($emp['name']);
                                 $emp_position = htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee'));
                                 $emp_department = htmlspecialchars($emp['department_name'] ?? 'Belum ada departemen');
                             ?>
@@ -201,7 +199,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                      data-position="<?= $emp_position ?>"
                                      data-department="<?= $emp_department ?>"
                                 >
-                                    <!-- AVATAR DENGAN BORDER SAMAA SEPERTI SECTION ABSENT -->
                                     <div class="w-12 h-12 md:w-14 md:h-14 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white shrink-0 group-hover:scale-105 transition-transform">
                                         <img src="<?= $emp_avatar ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
                                     </div>
@@ -214,7 +211,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                         </span>
                                     </div>
                                     
-                                    <!-- Ikon Panah indikator klik -->
                                     <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300 group-hover:text-primary transition-colors"></i>
                                 </div>
                             <?php endforeach; ?>

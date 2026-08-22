@@ -1,5 +1,5 @@
 // Ganti versi ini (misal menjadi v2, v3, dst) jika ada update besar pada file CSS/JS/HTML
-const CACHE_NAME = 'hris-pwa-v2';
+const CACHE_NAME = 'hris-pwa-v3';
 const urlsToCache = [
     '/',
     '/index'
