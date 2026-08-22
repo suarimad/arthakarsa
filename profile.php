@@ -120,17 +120,13 @@ require_once __DIR__ . '/components/sidebar.php';
                 
                 <div class="md:col-span-2 space-y-5 md:space-y-6 relative z-0">
                     
-                    <!-- KARTU PROFIL UTAMA -->
+                    <!-- KARTU PROFIL UTAMA (ICON KAMERA DIHAPUS) -->
                     <section class="bg-surface border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left relative overflow-hidden z-0">
                         <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none -z-10"></div>
                         
-                        <!-- Avatar Profile -->
-                        <div class="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-surface shadow-md relative z-10 shrink-0 bg-gray-50">
-                            <img src="<?= $profile_avatar_url ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
-                            <!-- Tombol Edit Avatar (Visual saja) -->
-                            <button class="absolute bottom-0 right-0 w-8 h-8 bg-primary text-surface rounded-full flex items-center justify-center border-2 border-surface shadow-sm hover:scale-105 transition">
-                                <i data-lucide="camera" class="w-4 h-4"></i>
-                            </button>
+                        <!-- Avatar Profile (Bersih Tanpa Icon Kamera) -->
+                        <div class="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-surface shadow-md relative z-10 shrink-0 bg-gray-50 overflow-hidden">
+                            <img src="<?= $profile_avatar_url ?>" alt="Profile" class="w-full h-full object-cover">
                         </div>
                         
                         <!-- Info Singkat -->
@@ -149,9 +145,10 @@ require_once __DIR__ . '/components/sidebar.php';
                     <section class="bg-surface border border-gray-100 rounded-3xl shadow-sm overflow-hidden relative z-0">
                         <div class="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
                             <h3 class="text-sm font-semibold text-gray-800">Informasi Pribadi</h3>
-                            <button class="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1">
+                            <!-- URL DIUBAH KE profile_edit -->
+                            <a href="profile_edit" class="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1">
                                 <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
-                            </button>
+                            </a>
                         </div>
                         <div class="p-5 space-y-4">
                             <div>
@@ -217,7 +214,8 @@ require_once __DIR__ . '/components/sidebar.php';
                                 </div>
                             <?php endif; ?>
 
-                            <a href="#" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
+                            <!-- URL DIUBAH KE change_password -->
+                            <a href="change_password" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition">
                                         <i data-lucide="lock" class="w-4 h-4"></i>
@@ -227,17 +225,19 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
                             </a>
                             
-                            <a href="#" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
+                            <!-- URL DIUBAH KE setting -->
+                            <a href="setting" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition">
-                                        <i data-lucide="bell" class="w-4 h-4"></i>
+                                        <i data-lucide="sliders" class="w-4 h-4"></i>
                                     </div>
-                                    <span class="text-xs font-semibold text-gray-700 group-hover:text-primary transition">Notifikasi</span>
+                                    <span class="text-xs font-semibold text-gray-700 group-hover:text-primary transition">Pengaturan Aplikasi</span>
                                 </div>
                                 <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
                             </a>
 
-                            <a href="#" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
+                            <!-- URL DIUBAH KE help -->
+                            <a href="help" class="flex items-center justify-between p-4 hover:bg-gray-50 transition group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition">
                                         <i data-lucide="help-circle" class="w-4 h-4"></i>
@@ -260,7 +260,7 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
-<!-- MODAL PENDAFTARAN WAJAH (Disingkat visualisasinya) -->
+<!-- MODAL PENDAFTARAN WAJAH -->
 <div id="faceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <div id="faceOverlay" onclick="closeFaceRegistration()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
@@ -296,7 +296,6 @@ require_once __DIR__ . '/components/sidebar.php';
 <!-- Library Kecerdasan Buatan (Face-API.js) -->
 <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
-<!-- Script Interaktif -->
 <script>
     lucide.createIcons();
 
