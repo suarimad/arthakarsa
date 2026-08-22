@@ -19,9 +19,9 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// PENYESUAIAN: Menambahkan JOIN ke tabel roles dan menarik avatar
+// PENYESUAIAN: Menambahkan JOIN ke tabel roles, dan mengambil kolom whatsapp & avatar
 $stmt = $pdo->prepare("
-    SELECT u.id, u.name, u.email, u.avatar, 
+    SELECT u.id, u.name, u.email, u.whatsapp, u.avatar, 
            r.name as role_name, r.display_name as role_display, 
            p.name as position_name, d.name as department_name 
     FROM users u 
@@ -48,16 +48,23 @@ foreach ($all_employees as $emp) {
 // MOCKUP: Ambil max 5 karyawan untuk dijadikan data "Teman yang tidak masuk" (Simulasi)
 $absentEmployees = array_slice($otherEmployees, 0, 5); 
 
+// 1. Load Head
 require_once __DIR__ . '/components/head.php';
+
+// 2. Memasukkan FontAwesome khusus untuk halaman ini (agar icon WhatsApp muncul)
+echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">';
+
+// 3. Load Sidebar
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<!-- PERBAIKAN: Ditambahkan overscroll-y-contain untuk memblokir Native Refresh dari Browser HP -->
-<div id="main-scroll-container" class="flex-1 overflow-y-auto overscroll-y-contain relative w-full overflow-x-hidden">
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6 relative z-0">
+<!-- Ditambahkan ID main-scroll-container untuk deteksi scroll Pull to Refresh -->
+<div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
+    <!-- Diubah menjadi pb-36 agar list paling bawah tidak terhalang bottom nav -->
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-36 md:pb-8 md:px-6 relative">
         
-        <!-- PULL TO REFRESH INDICATOR (Diubah menjadi z-[60] agar overlay di atas header, dan pointer-events-none agar tidak memblokir klik) -->
-        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-[60] pointer-events-none">
+        <!-- PULL TO REFRESH INDICATOR (Sesuai dengan gaya di index.php) -->
+        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-50">
             <div class="bg-surface rounded-full shadow-md p-2 flex items-center justify-center mt-2">
                 <i data-lucide="refresh-cw" class="w-5 h-5 text-primary animate-spin"></i>
             </div>
@@ -65,8 +72,8 @@ require_once __DIR__ . '/components/sidebar.php';
 
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <!-- Halaman konten tetap z-0 agar saat di-scroll konten tenggelam ke bawah header -->
-        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
+        <!-- Konten Utama -->
+        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-10">
             
             <div class="flex justify-between items-center px-1">
                 <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Direktori Karyawan</h2>
@@ -136,8 +143,8 @@ require_once __DIR__ . '/components/sidebar.php';
                             <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" id="employeeCount"><?= count($otherEmployees) ?> orang</span>
                         </div>
                         
-                        <!-- Kontainer AJAX Render -->
-                        <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0">
+                        <!-- Kontainer AJAX Render (Ditambahkan pb-12 ekstra agar bisa ter-scroll lega) -->
+                        <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0 pb-12">
                             <?php foreach($otherEmployees as $emp): 
                                 $emp_avatar = !empty($emp['avatar']) ? "assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($emp['name']);
                             ?>
@@ -152,9 +159,25 @@ require_once __DIR__ . '/components/sidebar.php';
                                         </p>
                                     </div>
                                     
-                                    <a href="mailto:<?= htmlspecialchars($emp['email']) ?>" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center hover:text-primary hover:bg-primary/10 transition shrink-0" title="Kirim Email">
-                                        <i data-lucide="message-square" class="w-4 h-4 md:w-4.5 md:h-4.5"></i>
-                                    </a>
+                                    <!-- Aksi: WhatsApp dan Email -->
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <?php if (!empty($emp['whatsapp'])): 
+                                            // Format nomor WA (menghilangkan spasi/tanda hubung)
+                                            $wa_number = preg_replace('/[^0-9]/', '', $emp['whatsapp']);
+                                            // Jika dimulai dengan 0, ganti jadi 62 (Kode Indonesia)
+                                            if (strpos($wa_number, '0') === 0) {
+                                                $wa_number = '62' . substr($wa_number, 1);
+                                            }
+                                        ?>
+                                            <a href="https://wa.me/<?= $wa_number ?>" target="_blank" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-success/10 text-success flex items-center justify-center hover:bg-success hover:text-surface transition shadow-sm" title="WhatsApp">
+                                                <i class="fa-brands fa-whatsapp text-lg"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <a href="mailto:<?= htmlspecialchars($emp['email']) ?>" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center hover:text-primary hover:bg-primary/10 transition shadow-sm" title="Kirim Email">
+                                            <i data-lucide="mail" class="w-4 h-4 md:w-4.5 md:h-4.5"></i>
+                                        </a>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                             
@@ -217,7 +240,7 @@ require_once __DIR__ . '/components/sidebar.php';
     lucide.createIcons();
 
     // ==========================================
-    // PULL TO REFRESH (PWA / Mobile Behavior)
+    // PULL TO REFRESH (Sesuai dengan index.php)
     // ==========================================
     const ptrContainer = document.getElementById('main-scroll-container');
     const ptrIndicator = document.getElementById('ptr-indicator');
@@ -227,11 +250,10 @@ require_once __DIR__ . '/components/sidebar.php';
 
     if(ptrContainer && ptrIndicator) {
         ptrContainer.addEventListener('touchstart', (e) => {
-            // Toleransi angka scrollTop di HP asli <= 5
-            if (ptrContainer.scrollTop <= 5) { 
+            if (ptrContainer.scrollTop === 0) {
                 startY = e.touches[0].clientY;
                 isPulling = true;
-                ptrIndicator.style.transition = 'none'; // hapus transisi agar smooth saat ditarik
+                ptrIndicator.style.transition = 'none';
             }
         }, { passive: true });
 
@@ -240,9 +262,7 @@ require_once __DIR__ . '/components/sidebar.php';
             currentY = e.touches[0].clientY;
             let distance = currentY - startY;
 
-            // Jika menarik ke bawah saat scroll sudah paling atas
-            if (distance > 0 && ptrContainer.scrollTop <= 5) {
-                // Beri efek friction (menahan tarikan jika terlalu jauh)
+            if (distance > 0 && ptrContainer.scrollTop === 0) {
                 if (distance > 100) distance = 100 + (distance - 100) * 0.2;
                 ptrIndicator.style.height = `${distance}px`;
             } else {
@@ -255,14 +275,12 @@ require_once __DIR__ . '/components/sidebar.php';
             isPulling = false;
             ptrIndicator.style.transition = 'height 0.3s ease';
 
-            // Jika ditarik cukup jauh (>60px), lakukan refresh
             if (parseFloat(ptrIndicator.style.height) > 60) {
-                ptrIndicator.style.height = '60px'; // Tahan spinner
+                ptrIndicator.style.height = '60px';
                 setTimeout(() => {
                     window.location.reload();
                 }, 400);
             } else {
-                // Batal tarik
                 ptrIndicator.style.height = '0px';
             }
         });
@@ -280,7 +298,6 @@ require_once __DIR__ . '/components/sidebar.php';
             clearTimeout(searchTimeout);
             const q = this.value;
             
-            // Render Loading State (Opsional)
             container.innerHTML = '<div class="col-span-full py-8 text-center"><i data-lucide="loader-2" class="w-6 h-6 text-gray-400 animate-spin mx-auto"></i></div>';
             lucide.createIcons();
 
@@ -292,7 +309,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         lucide.createIcons();
                     })
                     .catch(err => console.error("Gagal mengambil data", err));
-            }, 400); // 400ms debounce
+            }, 400); 
         });
     }
 
