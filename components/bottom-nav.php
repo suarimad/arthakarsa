@@ -50,7 +50,8 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
 <!-- ========================================================================= -->
 <!-- 2. MODAL / BOTTOM SHEET MENU UTAMA (Tersedia di Mobile & Desktop)         -->
 <!-- ========================================================================= -->
-<div id="mainMenuModal" class="fixed inset-0 z-[70] hidden">
+<!-- PENYESUAIAN: z-index disamakan menjadi z-50 seperti "Buat Pengajuan" -->
+<div id="mainMenuModal" class="fixed inset-0 z-50 hidden">
     <!-- Overlay -->
     <div id="mainMenuOverlay" onclick="closeMainMenu()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
@@ -75,7 +76,8 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
             </div>
 
             <!-- Area Konten Menu (Scrollable) -->
-            <div class="overflow-y-auto p-5 md:p-8 space-y-8 flex-1 overscroll-y-contain">
+            <!-- PENYESUAIAN: Ditambahkan pb-12 agar scroll bisa turun lebih dalam dan tidak mentok -->
+            <div class="overflow-y-auto p-5 pb-12 md:p-8 md:pb-8 space-y-8 flex-1 overscroll-y-contain">
                 
                 <!-- SECTION 1: EKSPLORASI FITUR (Muncul untuk semua orang) -->
                 <div>
