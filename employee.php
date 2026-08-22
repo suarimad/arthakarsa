@@ -6,6 +6,38 @@ require_once __DIR__ . '/components/auth.php';
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
+// Logika Hak Akses (Hanya Role ID 1, 2, 3 yang bisa kelola Karyawan)
+$role_id = $_SESSION['role_id'] ?? null;
+$role_name = strtolower($_SESSION['role'] ?? '');
+$can_manage_employee = in_array($role_id, [1, 2, 3]) || in_array($role_name, ['superadmin', 'admin', 'hr']);
+
+// ==========================================
+// PENANGANAN AJAX: SOFT DELETE KARYAWAN
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'delete_employee') {
+    header('Content-Type: application/json');
+    
+    if (!$can_manage_employee) {
+        echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki akses untuk menghapus data ini.']);
+        exit;
+    }
+
+    try {
+        $del_id = $_POST['id'];
+        // Soft delete: Hanya mengisi tanggal di kolom deleted_at
+        $stmtDel = $pdo->prepare("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?");
+        $stmtDel->execute([$del_id, $tenant_id]);
+        
+        $_SESSION['toast_msg'] = "Data karyawan berhasil dihapus!";
+        $_SESSION['toast_type'] = "success";
+        echo json_encode(['status' => 'success']);
+    } catch (Exception $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+// ==========================================
+
 // Tangkap session toast
 $toast_msg = '';
 $toast_type = '';
@@ -19,7 +51,7 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// PENYESUAIAN: Menambahkan JOIN ke tabel roles, dan mengambil kolom whatsapp & avatar
+// PENYESUAIAN: Menambahkan JOIN ke tabel roles, dan filter deleted_at IS NULL
 $stmt = $pdo->prepare("
     SELECT u.id, u.name, u.email, u.whatsapp, u.avatar, 
            r.name as role_name, r.display_name as role_display, 
@@ -28,7 +60,7 @@ $stmt = $pdo->prepare("
     LEFT JOIN positions p ON u.position_id = p.id
     LEFT JOIN departments d ON p.department_id = d.id
     LEFT JOIN roles r ON u.role_id = r.id
-    WHERE u.tenant_id = ?
+    WHERE u.tenant_id = ? AND u.deleted_at IS NULL
     ORDER BY u.name ASC
 ");
 $stmt->execute([$tenant_id]);
@@ -48,23 +80,18 @@ foreach ($all_employees as $emp) {
 // MOCKUP: Ambil max 5 karyawan untuk dijadikan data "Teman yang tidak masuk" (Simulasi)
 $absentEmployees = array_slice($otherEmployees, 0, 5); 
 
-// 1. Load Head
 require_once __DIR__ . '/components/head.php';
-
-// 2. Memasukkan FontAwesome khusus untuk halaman ini (agar icon WhatsApp muncul)
+// Memasukkan FontAwesome untuk icon WhatsApp
 echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">';
-
-// 3. Load Sidebar
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
 <!-- Ditambahkan ID main-scroll-container untuk deteksi scroll Pull to Refresh -->
-<div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <!-- Diubah menjadi pb-36 agar list paling bawah tidak terhalang bottom nav -->
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-36 md:pb-8 md:px-6 relative">
+<div id="main-scroll-container" class="flex-1 overflow-y-auto overscroll-y-contain relative w-full overflow-x-hidden">
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-36 md:pb-8 md:px-6 relative z-0">
         
-        <!-- PULL TO REFRESH INDICATOR (Sesuai dengan gaya di index.php) -->
-        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-50">
+        <!-- PULL TO REFRESH INDICATOR -->
+        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-[60] pointer-events-none">
             <div class="bg-surface rounded-full shadow-md p-2 flex items-center justify-center mt-2">
                 <i data-lucide="refresh-cw" class="w-5 h-5 text-primary animate-spin"></i>
             </div>
@@ -72,13 +99,13 @@ require_once __DIR__ . '/components/sidebar.php';
 
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <!-- Konten Utama -->
-        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-10">
+        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
                 <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Direktori Karyawan</h2>
                 
-                <?php if($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'superadmin'): ?>
+                <!-- HANYA MUNCUL JIKA ROLE 1, 2, ATAU 3 -->
+                <?php if($can_manage_employee): ?>
                 <a href="employee_add" class="bg-primary/10 text-primary px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm">
                     <i data-lucide="user-plus" class="w-4 h-4"></i> Tambah
                 </a>
@@ -143,41 +170,36 @@ require_once __DIR__ . '/components/sidebar.php';
                             <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" id="employeeCount"><?= count($otherEmployees) ?> orang</span>
                         </div>
                         
-                        <!-- Kontainer AJAX Render (Ditambahkan pb-12 ekstra agar bisa ter-scroll lega) -->
+                        <!-- Kontainer AJAX Render (Ditambahkan pb-12 ekstra agar bisa ter-scroll lega dari bottom nav) -->
                         <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0 pb-12">
                             <?php foreach($otherEmployees as $emp): 
                                 $emp_avatar = !empty($emp['avatar']) ? "assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($emp['name']);
+                                $emp_position = htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee'));
+                                $emp_department = htmlspecialchars($emp['department_name'] ?? 'Belum ada departemen');
                             ?>
-                                <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 group cursor-pointer relative z-0">
-                                    <img src="<?= $emp_avatar ?>" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 group-hover:scale-105 transition-transform bg-gray-50 object-cover">
+                                <!-- CARD KLIKABEL UNTUK MEMBUKA MODAL DETAIL -->
+                                <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 hover:shadow-md cursor-pointer relative z-0 group"
+                                     onclick="openEmployeeDetail(this)"
+                                     data-id="<?= $emp['id'] ?>"
+                                     data-name="<?= htmlspecialchars($emp['name']) ?>"
+                                     data-email="<?= htmlspecialchars($emp['email']) ?>"
+                                     data-whatsapp="<?= htmlspecialchars($emp['whatsapp'] ?? '') ?>"
+                                     data-avatar="<?= $emp_avatar ?>"
+                                     data-position="<?= $emp_position ?>"
+                                     data-department="<?= $emp_department ?>"
+                                >
+                                    <img src="<?= $emp_avatar ?>" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 transition-transform bg-gray-50 object-cover group-hover:scale-105">
                                     
                                     <div class="flex-1 min-w-0">
                                         <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= htmlspecialchars($emp['name']) ?></h4>
-                                        <p class="text-[11px] text-gray-500 font-medium truncate mt-0.5"><?= htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee')) ?></p>
-                                        <p class="text-[10px] text-gray-400 truncate mt-1.5 flex items-center gap-1">
-                                            <i data-lucide="mail" class="w-3 h-3"></i> <?= htmlspecialchars($emp['email']) ?>
-                                        </p>
+                                        <p class="text-[11px] text-gray-500 font-medium truncate mt-0.5"><?= $emp_position ?></p>
+                                        <span class="inline-block mt-1.5 px-2 py-0.5 bg-gray-50 border border-gray-100 text-gray-400 text-[9px] font-semibold rounded-md truncate max-w-full">
+                                            <?= $emp_department ?>
+                                        </span>
                                     </div>
                                     
-                                    <!-- Aksi: WhatsApp dan Email -->
-                                    <div class="flex items-center gap-2 shrink-0">
-                                        <?php if (!empty($emp['whatsapp'])): 
-                                            // Format nomor WA (menghilangkan spasi/tanda hubung)
-                                            $wa_number = preg_replace('/[^0-9]/', '', $emp['whatsapp']);
-                                            // Jika dimulai dengan 0, ganti jadi 62 (Kode Indonesia)
-                                            if (strpos($wa_number, '0') === 0) {
-                                                $wa_number = '62' . substr($wa_number, 1);
-                                            }
-                                        ?>
-                                            <a href="https://wa.me/<?= $wa_number ?>" target="_blank" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-success/10 text-success flex items-center justify-center hover:bg-success hover:text-surface transition shadow-sm" title="WhatsApp">
-                                                <i class="fa-brands fa-whatsapp text-lg"></i>
-                                            </a>
-                                        <?php endif; ?>
-                                        
-                                        <a href="mailto:<?= htmlspecialchars($emp['email']) ?>" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center hover:text-primary hover:bg-primary/10 transition shadow-sm" title="Kirim Email">
-                                            <i data-lucide="mail" class="w-4 h-4 md:w-4.5 md:h-4.5"></i>
-                                        </a>
-                                    </div>
+                                    <!-- Ikon Panah sebagai indikator bisa diklik -->
+                                    <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300 group-hover:text-primary transition-colors"></i>
                                 </div>
                             <?php endforeach; ?>
                             
@@ -197,6 +219,56 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
         </div>
     </main>
+</div>
+
+<!-- ================= MODAL DETAIL KARYAWAN (Bottom Sheet / Modal) ================= -->
+<div id="employeeDetailModal" class="fixed inset-0 hidden" style="z-index: 99999;">
+    <!-- Overlay -->
+    <div id="employeeDetailOverlay" onclick="closeEmployeeDetail()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    
+    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
+        <div id="employeeDetailCard" class="bg-surface w-full max-w-sm rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col p-6">
+            
+            <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeEmployeeDetail()">
+                <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <!-- Header Profil -->
+            <div class="flex items-center gap-4 mb-6">
+                <img id="detAvatar" src="" alt="Avatar" class="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover shadow-sm bg-gray-50 border border-gray-100">
+                <div class="flex-1 min-w-0">
+                    <h3 id="detName" class="text-lg md:text-xl font-bold text-gray-800 truncate">Nama</h3>
+                    <p id="detPosition" class="text-xs text-gray-500 font-medium truncate mt-0.5">Posisi</p>
+                    <span id="detDepartment" class="inline-block mt-1.5 px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md truncate max-w-full">Dept</span>
+                </div>
+            </div>
+
+            <!-- Tombol Kontak Cepat -->
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <a id="btnDetEmail" href="#" class="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-primary hover:text-white hover:border-primary transition group shadow-sm active:scale-95">
+                    <i data-lucide="mail" class="w-5 h-5"></i>
+                    <span class="text-[10px] font-bold">Email</span>
+                </a>
+                <a id="btnDetWa" href="#" target="_blank" class="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-success/10 border border-success/20 text-success hover:bg-success hover:text-white transition group shadow-sm active:scale-95">
+                    <i class="fa-brands fa-whatsapp text-xl"></i>
+                    <span class="text-[10px] font-bold">WhatsApp</span>
+                </a>
+            </div>
+
+            <!-- HANYA MUNCUL JIKA ROLE 1, 2, ATAU 3 -->
+            <?php if($can_manage_employee): ?>
+            <div class="border-t border-gray-100 pt-5 flex gap-3">
+                <button id="btnDetEdit" onclick="editEmployee()" class="flex-1 bg-gray-50 text-gray-700 py-3 rounded-xl text-xs font-semibold hover:bg-gray-100 transition shadow-sm active:scale-95 flex items-center justify-center gap-1.5">
+                    <i data-lucide="edit-3" class="w-4 h-4"></i> Edit
+                </button>
+                <button id="btnDetDelete" onclick="deleteEmployee()" class="flex-1 bg-failed/10 text-failed py-3 rounded-xl text-xs font-semibold hover:bg-failed hover:text-white transition shadow-sm active:scale-95 flex items-center justify-center gap-1.5">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i> Hapus
+                </button>
+            </div>
+            <?php endif; ?>
+            
+        </div>
+    </div>
 </div>
 
 <!-- ================= BOTTOM SHEET REQUEST ================= -->
@@ -240,7 +312,99 @@ require_once __DIR__ . '/components/sidebar.php';
     lucide.createIcons();
 
     // ==========================================
-    // PULL TO REFRESH (Sesuai dengan index.php)
+    // LOGIKA MODAL DETAIL KARYAWAN
+    // ==========================================
+    let currentDetailEmpId = null;
+
+    function openEmployeeDetail(el) {
+        currentDetailEmpId = el.getAttribute('data-id');
+        
+        // Isi data modal
+        document.getElementById('detName').innerText = el.getAttribute('data-name');
+        document.getElementById('detPosition').innerText = el.getAttribute('data-position');
+        document.getElementById('detDepartment').innerText = el.getAttribute('data-department');
+        document.getElementById('detAvatar').src = el.getAttribute('data-avatar');
+        
+        // Setup tombol Email
+        const email = el.getAttribute('data-email');
+        document.getElementById('btnDetEmail').href = "mailto:" + email;
+
+        // Setup tombol WhatsApp
+        const wa = el.getAttribute('data-whatsapp');
+        const btnWa = document.getElementById('btnDetWa');
+        if (wa && wa.trim() !== '') {
+            // Bersihkan nomor (hilangkan strip/spasi)
+            let wa_number = wa.replace(/[^0-9]/g, '');
+            // Ubah awalan 0 menjadi 62 (Kode Negara Indonesia)
+            if (wa_number.startsWith('0')) {
+                wa_number = '62' + wa_number.substring(1);
+            }
+            btnWa.href = "https://wa.me/" + wa_number;
+            btnWa.classList.remove('hidden');
+            btnWa.classList.add('flex');
+        } else {
+            btnWa.classList.add('hidden');
+            btnWa.classList.remove('flex');
+        }
+
+        // Tampilkan Modal
+        const m = document.getElementById('employeeDetailModal');
+        const o = document.getElementById('employeeDetailOverlay');
+        const c = document.getElementById('employeeDetailCard');
+        
+        m.classList.remove('hidden');
+        setTimeout(() => {
+            o.classList.remove('opacity-0');
+            c.classList.remove('translate-y-full');
+            c.classList.remove('md:scale-95', 'md:opacity-0');
+            c.classList.add('translate-y-0');
+            c.classList.add('md:scale-100', 'md:opacity-100');
+        }, 10);
+    }
+
+    function closeEmployeeDetail() {
+        const m = document.getElementById('employeeDetailModal');
+        const o = document.getElementById('employeeDetailOverlay');
+        const c = document.getElementById('employeeDetailCard');
+        
+        o.classList.add('opacity-0');
+        c.classList.remove('translate-y-0');
+        c.classList.remove('md:scale-100', 'md:opacity-100');
+        c.classList.add('translate-y-full');
+        c.classList.add('md:scale-95', 'md:opacity-0');
+        setTimeout(() => { m.classList.add('hidden'); }, 300);
+    }
+
+    function editEmployee() {
+        if (!currentDetailEmpId) return;
+        // Redirect ke halaman edit
+        window.location.href = "employee_edit?id=" + currentDetailEmpId;
+    }
+
+    function deleteEmployee() {
+        if (!currentDetailEmpId) return;
+        if (!confirm("Apakah Anda yakin ingin menghapus data karyawan ini?")) return;
+        
+        const formData = new FormData();
+        formData.append('ajax_action', 'delete_employee');
+        formData.append('id', currentDetailEmpId);
+
+        fetch('', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    window.showToast(data.message, 'error');
+                }
+            })
+            .catch(() => {
+                window.showToast('Gagal terhubung ke server', 'error');
+            });
+    }
+
+    // ==========================================
+    // PULL TO REFRESH (PWA / Mobile Behavior)
     // ==========================================
     const ptrContainer = document.getElementById('main-scroll-container');
     const ptrIndicator = document.getElementById('ptr-indicator');
@@ -250,10 +414,10 @@ require_once __DIR__ . '/components/sidebar.php';
 
     if(ptrContainer && ptrIndicator) {
         ptrContainer.addEventListener('touchstart', (e) => {
-            if (ptrContainer.scrollTop === 0) {
+            if (ptrContainer.scrollTop <= 5) { 
                 startY = e.touches[0].clientY;
                 isPulling = true;
-                ptrIndicator.style.transition = 'none';
+                ptrIndicator.style.transition = 'none'; 
             }
         }, { passive: true });
 
@@ -262,7 +426,7 @@ require_once __DIR__ . '/components/sidebar.php';
             currentY = e.touches[0].clientY;
             let distance = currentY - startY;
 
-            if (distance > 0 && ptrContainer.scrollTop === 0) {
+            if (distance > 0 && ptrContainer.scrollTop <= 5) {
                 if (distance > 100) distance = 100 + (distance - 100) * 0.2;
                 ptrIndicator.style.height = `${distance}px`;
             } else {
@@ -276,10 +440,8 @@ require_once __DIR__ . '/components/sidebar.php';
             ptrIndicator.style.transition = 'height 0.3s ease';
 
             if (parseFloat(ptrIndicator.style.height) > 60) {
-                ptrIndicator.style.height = '60px';
-                setTimeout(() => {
-                    window.location.reload();
-                }, 400);
+                ptrIndicator.style.height = '60px'; 
+                setTimeout(() => { window.location.reload(); }, 400);
             } else {
                 ptrIndicator.style.height = '0px';
             }
@@ -322,17 +484,19 @@ require_once __DIR__ . '/components/sidebar.php';
         const overlay = document.getElementById('requestOverlay');
         const sheet = document.getElementById('requestSheet');
 
-        function openSheet() {
-            bottomSheet.classList.remove('hidden');
-            setTimeout(() => { overlay.classList.remove('opacity-0'); sheet.classList.remove('translate-y-full'); }, 10);
-        }
-        function closeSheet() {
-            overlay.classList.add('opacity-0'); sheet.classList.add('translate-y-full');
-            setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300);
-        }
+        if (requestBtn && bottomSheet && overlay && sheet) {
+            function openSheet() {
+                bottomSheet.classList.remove('hidden');
+                setTimeout(() => { overlay.classList.remove('opacity-0'); sheet.classList.remove('translate-y-full'); }, 10);
+            }
+            function closeSheet() {
+                overlay.classList.add('opacity-0'); sheet.classList.add('translate-y-full');
+                setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300);
+            }
 
-        if (requestBtn) requestBtn.addEventListener('click', (e) => { e.preventDefault(); openSheet(); });
-        if (overlay) overlay.addEventListener('click', closeSheet);
+            requestBtn.addEventListener('click', (e) => { e.preventDefault(); openSheet(); });
+            overlay.addEventListener('click', closeSheet);
+        }
     });
 </script>
 
