@@ -56,8 +56,8 @@ require_once __DIR__ . '/components/sidebar.php';
 <div id="main-scroll-container" class="flex-1 overflow-y-auto overscroll-y-contain relative w-full overflow-x-hidden">
     <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6 relative z-0">
         
-        <!-- PULL TO REFRESH INDICATOR (Tampil saat ditarik di mobile - Diubah z-0 agar tidak menimpa header) -->
-        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-0">
+        <!-- PULL TO REFRESH INDICATOR (Diubah menjadi z-[60] agar overlay di atas header, dan pointer-events-none agar tidak memblokir klik) -->
+        <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-[60] pointer-events-none">
             <div class="bg-surface rounded-full shadow-md p-2 flex items-center justify-center mt-2">
                 <i data-lucide="refresh-cw" class="w-5 h-5 text-primary animate-spin"></i>
             </div>
@@ -65,7 +65,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <!-- Diubah z-10 menjadi z-0 agar saat di-scroll konten akan tenggelam ke bawah header -->
+        <!-- Halaman konten tetap z-0 agar saat di-scroll konten tenggelam ke bawah header -->
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
@@ -227,7 +227,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
     if(ptrContainer && ptrIndicator) {
         ptrContainer.addEventListener('touchstart', (e) => {
-            // PERBAIKAN: Toleransi angka scrollTop di HP asli <= 5
+            // Toleransi angka scrollTop di HP asli <= 5
             if (ptrContainer.scrollTop <= 5) { 
                 startY = e.touches[0].clientY;
                 isPulling = true;
