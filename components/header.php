@@ -1,11 +1,27 @@
 <?php
-// Ambil data dinamis dari Session atau tangkap dari file induk (seperti profile.php / employee.php)
+// Ambil data dinamis dari Session / Variabel Induk
 $header_user_name = $user_name ?? $_SESSION['user_name'] ?? 'User';
 $header_user_role = $user_role ?? $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
-$header_tenant_name = $tenant_name ?? $_SESSION['tenant_name'] ?? 'Sistem Pusat';
+$header_tenant_name = $tenant_name ?? $_SESSION['tenant_name'] ?? 'Perusahaan';
+
+// LOGIKA OTOMATIS: Ambil avatar dari DB/Session di header agar selalu konsisten di SEMUA halaman
 $header_user_avatar = $user_avatar ?? $_SESSION['avatar'] ?? null;
 
-// Generator Avatar Dinamis (Cek apakah ada file avatar, jika tidak gunakan DiceBear Pixel-Art)
+if (empty($header_user_avatar) && isset($pdo) && isset($_SESSION['user_id'])) {
+    try {
+        $stmtHeader = $pdo->prepare("SELECT avatar FROM users WHERE id = ? LIMIT 1");
+        $stmtHeader->execute([$_SESSION['user_id']]);
+        $headerUser = $stmtHeader->fetch(PDO::FETCH_ASSOC);
+        if ($headerUser && !empty($headerUser['avatar'])) {
+            $header_user_avatar = $headerUser['avatar'];
+            $_SESSION['avatar'] = $headerUser['avatar']; // Simpan ke session untuk mempercepat load berikutnya
+        }
+    } catch (Exception $e) {
+        // Abaikan error jika query gagal
+    }
+}
+
+// Generator Avatar Dinamis (Gunakan foto jika ada, fallback ke DiceBear jika kosong)
 if (!empty($header_user_avatar)) {
     $header_avatar_url = "assets/img/avatars/" . htmlspecialchars($header_user_avatar);
 } else {
@@ -22,7 +38,9 @@ if (!empty($header_user_avatar)) {
         </button>
 
         <!-- Avatar Mobile -->
-        <img src="<?= $header_avatar_url ?>" alt="Profile" class="md:hidden w-10 h-10 rounded-full shadow-sm shrink-0 bg-gray-50 object-cover">
+        <a href="profile" class="md:hidden w-10 h-10 rounded-full shadow-sm shrink-0 bg-gray-50 overflow-hidden block">
+            <img src="<?= $header_avatar_url ?>" alt="Profile" class="w-full h-full object-cover">
+        </a>
         
         <div>
             <h1 class="text-base md:text-lg font-semibold text-gray-800 leading-tight">Halo, <?= htmlspecialchars($header_user_name) ?>!</h1>
@@ -41,7 +59,9 @@ if (!empty($header_user_avatar)) {
         </button>
         
         <!-- Avatar Desktop -->
-        <img id="profileDesktopBtn" src="<?= $header_avatar_url ?>" alt="Profile" class="hidden md:block w-10 h-10 rounded-full shadow-sm shrink-0 cursor-pointer hover:opacity-90 transition bg-gray-50 object-cover">
+        <a href="profile" class="hidden md:block w-10 h-10 rounded-full shadow-sm shrink-0 cursor-pointer hover:opacity-90 transition bg-gray-50 overflow-hidden">
+            <img id="profileDesktopBtn" src="<?= $header_avatar_url ?>" alt="Profile" class="w-full h-full object-cover">
+        </a>
     </div>
 
 </header>
