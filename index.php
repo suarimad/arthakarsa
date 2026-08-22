@@ -37,6 +37,7 @@ try {
 date_default_timezone_set($tenant_timezone);
 $date_today = date('Y-m-d');
 $time_now = date('Y-m-d H:i:s');
+$current_time_only = date('H:i:s');
 
 // ==========================================
 // PENANGANAN AJAX: SIMPAN DATA ABSENSI
@@ -77,8 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 exit;
             }
 
-            $stmt = $pdo->prepare("INSERT INTO attendances (tenant_id, user_id, date, shift_start, shift_end, clock_in_time, clock_in_lat, clock_in_lng, clock_in_image, clock_in_liveness_status, clock_in_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Valid', 'on_time')");
-            $stmt->execute([$tenant_id, $user_id, $date_today, $shift_start_db, $shift_end_db, $time_now, $lat, $lng, $image_name]);
+            // Hitung Keterlambatan Otomatis
+            $clock_in_status = (strtotime($current_time_only) > strtotime($shift_start_db)) ? 'Terlambat' : 'On Time';
+
+            $stmt = $pdo->prepare("INSERT INTO attendances (tenant_id, user_id, date, shift_start, shift_end, clock_in_time, clock_in_lat, clock_in_lng, clock_in_image, clock_in_liveness_status, clock_in_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Valid', ?)");
+            $stmt->execute([$tenant_id, $user_id, $date_today, $shift_start_db, $shift_end_db, $time_now, $lat, $lng, $image_name, $clock_in_status]);
             $msg = "Absen Masuk berhasil dicatat!";
 
         } else {
@@ -233,11 +237,11 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <i data-lucide="clock" class="w-3 h-3 inline-block -mt-0.5 mr-0.5"></i> Shift: <?= $shift_start ?> - <?= $shift_end ?>
                             </p>
                             
-                            <!-- LOGIKA DISABLED BUTTONS -->
+                            <!-- LOGIKA DISABLED BUTTONS (Warna Terlihat Jelas Namun Disabled) -->
                             <div class="flex gap-3 md:w-2/3 lg:w-1/2">
                                 <!-- Tombol Masuk -->
                                 <?php if($has_clocked_in): ?>
-                                    <button disabled class="flex-1 bg-surface text-primary/40 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-sm opacity-80">
+                                    <button disabled class="flex-1 bg-white/20 text-white/80 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
                                         <i data-lucide="check-circle" class="w-4 h-4"></i> Masuk
                                     </button>
                                 <?php else: ?>
@@ -249,7 +253,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <!-- Tombol Pulang -->
                                 <?php if($has_clocked_out || !$has_clocked_in): ?>
                                     <!-- Disable Pulang jika sudah pulang, ATAU jika belum masuk sama sekali -->
-                                    <button disabled class="flex-1 bg-transparent border-2 border-surface/20 text-surface/50 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
+                                    <button disabled class="flex-1 bg-transparent border-2 border-white/20 text-white/50 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
                                         <i data-lucide="<?= $has_clocked_out ? 'check-circle' : 'log-out' ?>" class="w-4 h-4"></i> <?= $has_clocked_out ? 'Selesai' : 'Pulang' ?>
                                     </button>
                                 <?php else: ?>
@@ -278,11 +282,14 @@ require_once __DIR__ . '/components/sidebar.php';
                                     $time_in = isset($att['clock_in_time']) ? date('H:i', strtotime($att['clock_in_time'])) : '--:--';
                                     $time_out = isset($att['clock_out_time']) ? date('H:i', strtotime($att['clock_out_time'])) : '--:--';
                                     
-                                    $status_label = "Tepat Waktu";
-                                    $status_color = "text-success bg-success/10";
-                                    if(isset($att['clock_in_status']) && $att['clock_in_status'] === 'late') {
+                                    // Logika Status Berdasarkan String yang tersimpan di DB
+                                    $db_status = strtolower($att['clock_in_status'] ?? '');
+                                    if($db_status === 'late' || $db_status === 'terlambat') {
                                         $status_label = "Terlambat";
                                         $status_color = "text-failed bg-failed/10";
+                                    } else {
+                                        $status_label = "On Time";
+                                        $status_color = "text-success bg-success/10";
                                     }
                                 ?>
                                 <div class="bg-surface border border-gray-100 rounded-xl p-3 md:p-4 shadow-sm flex items-center justify-between transition hover:border-gray-200 cursor-pointer">
