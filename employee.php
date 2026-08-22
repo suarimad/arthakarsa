@@ -19,9 +19,9 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// PENYESUAIAN: Menambahkan JOIN ke tabel roles
+// PENYESUAIAN: Menambahkan JOIN ke tabel roles dan menarik avatar
 $stmt = $pdo->prepare("
-    SELECT u.id, u.name, u.email, 
+    SELECT u.id, u.name, u.email, u.avatar, 
            r.name as role_name, r.display_name as role_display, 
            p.name as position_name, d.name as department_name 
     FROM users u 
@@ -52,8 +52,8 @@ require_once __DIR__ . '/components/head.php';
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<!-- Ditambahkan ID main-scroll-container untuk deteksi scroll Pull to Refresh -->
-<div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
+<!-- PERBAIKAN: Ditambahkan overscroll-y-contain untuk memblokir Native Refresh dari Browser HP -->
+<div id="main-scroll-container" class="flex-1 overflow-y-auto overscroll-y-contain relative w-full overflow-x-hidden">
     <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6 relative z-0">
         
         <!-- PULL TO REFRESH INDICATOR (Tampil saat ditarik di mobile - Diubah z-0 agar tidak menimpa header) -->
@@ -90,10 +90,12 @@ require_once __DIR__ . '/components/sidebar.php';
                 <h3 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-3 px-1 uppercase tracking-wider">Tidak Masuk Hari Ini</h3>
                 <!-- Menyembunyikan Scrollbar namun tetap bisa di-swipe -->
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
-                    <?php foreach($absentEmployees as $absent): ?>
+                    <?php foreach($absentEmployees as $absent): 
+                        $abs_avatar = !empty($absent['avatar']) ? "assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($absent['name']);
+                    ?>
                     <div class="flex flex-col items-center gap-1.5 shrink-0 w-16">
-                        <div class="w-14 h-14 rounded-full border-[2.5px] border-failed p-0.5 relative">
-                            <img src="https://ui-avatars.com/api/?name=<?= urlencode($absent['name']) ?>&background=<?= str_replace('#', '', $app_settings['theme_color'] ?? 'ea3800') ?>&color=fff&rounded=true" alt="Profile" class="w-full h-full rounded-full object-cover">
+                        <div class="w-14 h-14 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white">
+                            <img src="<?= $abs_avatar ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
                         </div>
                         <span class="text-[9px] font-medium text-gray-600 w-full text-center truncate"><?= explode(' ', htmlspecialchars($absent['name']))[0] ?></span>
                     </div>
@@ -105,14 +107,16 @@ require_once __DIR__ . '/components/sidebar.php';
             <div class="md:grid md:grid-cols-3 md:gap-6 relative z-0">
                 <div class="md:col-span-3 space-y-5 md:space-y-6">
                     
-                    <?php if($currentUser): ?>
+                    <?php if($currentUser): 
+                        $curr_avatar = !empty($currentUser['avatar']) ? "assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($currentUser['name']);
+                    ?>
                     <section class="bg-primary rounded-2xl p-5 text-surface shadow-md relative z-0 overflow-hidden flex items-center gap-4">
                         <div class="absolute top-0 right-0 opacity-10 pointer-events-none">
                             <i data-lucide="award" class="w-32 h-32 md:w-48 md:h-48 -mt-4 md:-mt-8 -mr-4 md:-mr-8"></i>
                         </div>
                         
                         <div class="w-14 h-14 md:w-16 md:h-16 rounded-full bg-surface shrink-0 p-0.5 relative z-10 shadow-sm">
-                            <img src="https://ui-avatars.com/api/?name=<?= urlencode($currentUser['name']) ?>&background=fff&color=<?= str_replace('#','', $app_settings['theme_color'] ?? 'ea3800') ?>&rounded=true" alt="Profile" class="w-full h-full rounded-full object-cover">
+                            <img src="<?= $curr_avatar ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
                         </div>
                         
                         <div class="relative z-10 flex-1 min-w-0">
@@ -134,9 +138,11 @@ require_once __DIR__ . '/components/sidebar.php';
                         
                         <!-- Kontainer AJAX Render -->
                         <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0">
-                            <?php foreach($otherEmployees as $emp): ?>
+                            <?php foreach($otherEmployees as $emp): 
+                                $emp_avatar = !empty($emp['avatar']) ? "assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($emp['name']);
+                            ?>
                                 <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 group cursor-pointer relative z-0">
-                                    <img src="https://ui-avatars.com/api/?name=<?= urlencode($emp['name']) ?>&background=<?= str_replace('#', '', $app_settings['theme_color'] ?? 'ea3800') ?>&color=fff&rounded=true" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+                                    <img src="<?= $emp_avatar ?>" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 group-hover:scale-105 transition-transform bg-gray-50 object-cover">
                                     
                                     <div class="flex-1 min-w-0">
                                         <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= htmlspecialchars($emp['name']) ?></h4>
@@ -221,7 +227,8 @@ require_once __DIR__ . '/components/sidebar.php';
 
     if(ptrContainer && ptrIndicator) {
         ptrContainer.addEventListener('touchstart', (e) => {
-            if (ptrContainer.scrollTop === 0) {
+            // PERBAIKAN: Toleransi angka scrollTop di HP asli <= 5
+            if (ptrContainer.scrollTop <= 5) { 
                 startY = e.touches[0].clientY;
                 isPulling = true;
                 ptrIndicator.style.transition = 'none'; // hapus transisi agar smooth saat ditarik
@@ -234,7 +241,7 @@ require_once __DIR__ . '/components/sidebar.php';
             let distance = currentY - startY;
 
             // Jika menarik ke bawah saat scroll sudah paling atas
-            if (distance > 0 && ptrContainer.scrollTop === 0) {
+            if (distance > 0 && ptrContainer.scrollTop <= 5) {
                 // Beri efek friction (menahan tarikan jika terlalu jauh)
                 if (distance > 100) distance = 100 + (distance - 100) * 0.2;
                 ptrIndicator.style.height = `${distance}px`;
