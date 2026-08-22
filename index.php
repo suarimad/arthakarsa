@@ -13,6 +13,32 @@ $user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employe
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
 // ==========================================
+// 0. SETTING PENGATURAN & TIMEZONE TENANT
+// ==========================================
+$is_geofence_enabled = 1; // Default strict
+$tenant_timezone = 'Asia/Jakarta'; // Default Timezone
+
+try {
+    // Ambil Pengaturan Tenant (Geofence & Timezone)
+    $stmtSet = $pdo->prepare("SELECT is_geofence_enabled, timezone FROM tenant_settings WHERE tenant_id = ?");
+    $stmtSet->execute([$tenant_id]);
+    $setting = $stmtSet->fetch(PDO::FETCH_ASSOC);
+    if ($setting) {
+        $is_geofence_enabled = (int)$setting['is_geofence_enabled'];
+        if (!empty($setting['timezone'])) {
+            $tenant_timezone = $setting['timezone'];
+        }
+    }
+} catch (Exception $e) {
+    // Abaikan jika tabel/kolom belum siap, fallback ke default
+}
+
+// MENGATUR TIMEZONE SECARA DINAMIS BERDASARKAN DATABASE!
+date_default_timezone_set($tenant_timezone);
+$date_today = date('Y-m-d');
+$time_now = date('Y-m-d H:i:s');
+
+// ==========================================
 // PENANGANAN AJAX: SIMPAN DATA ABSENSI
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'attendance') {
@@ -24,30 +50,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         $image_base64 = $_POST['image'];
         $shift_start_db = $_POST['shift_start_db'] ?? '08:00:00';
         $shift_end_db = $_POST['shift_end_db'] ?? '17:00:00';
-        
-        $date = date('Y-m-d');
-        $time = date('Y-m-d H:i:s');
 
-        // 1. Simpan Foto Aktual dari Base64 ke Folder /uploads
+        // 1. Simpan Foto Aktual dari Base64 ke Folder /assets/img/attendances/
         $image_name = '';
         if (preg_match('/^data:image\/(\w+);base64,/', $image_base64, $type_match)) {
             $data = substr($image_base64, strpos($image_base64, ',') + 1);
             $data = base64_decode($data);
             $image_name = 'att_' . $user_id . '_' . time() . '.jpg';
             
-            $upload_dir = __DIR__ . '/uploads';
+            // Perubahan path ke assets/img/attendances/
+            $upload_dir = __DIR__ . '/assets/img/attendances';
             if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
             file_put_contents($upload_dir . '/' . $image_name, $data);
         }
 
+        // Cek Keberadaan Data Hari Ini (Pencegah Duplikasi Multiple Request)
+        $stmtCheck = $pdo->prepare("SELECT id, clock_in_time, clock_out_time FROM attendances WHERE user_id = ? AND date = ? LIMIT 1");
+        $stmtCheck->execute([$user_id, $date_today]);
+        $todayAtt = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
         // 2. Simpan ke Tabel attendances
         if ($type === 'in') {
+            // Mencegah duplicate entry Clock In
+            if ($todayAtt) {
+                echo json_encode(['status' => 'success', 'message' => 'Anda sudah absen masuk hari ini.']);
+                exit;
+            }
+
             $stmt = $pdo->prepare("INSERT INTO attendances (tenant_id, user_id, date, shift_start, shift_end, clock_in_time, clock_in_lat, clock_in_lng, clock_in_image, clock_in_liveness_status, clock_in_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Valid', 'on_time')");
-            $stmt->execute([$tenant_id, $user_id, $date, $shift_start_db, $shift_end_db, $time, $lat, $lng, $image_name]);
+            $stmt->execute([$tenant_id, $user_id, $date_today, $shift_start_db, $shift_end_db, $time_now, $lat, $lng, $image_name]);
             $msg = "Absen Masuk berhasil dicatat!";
+
         } else {
+            // Mencegah duplicate entry Clock Out
+            if ($todayAtt && $todayAtt['clock_out_time'] != null) {
+                echo json_encode(['status' => 'success', 'message' => 'Anda sudah absen pulang hari ini.']);
+                exit;
+            }
+
             $stmt = $pdo->prepare("UPDATE attendances SET clock_out_time = ?, clock_out_lat = ?, clock_out_lng = ?, clock_out_image = ?, clock_out_liveness_status = 'Valid', clock_out_status = 'on_time' WHERE user_id = ? AND date = ? ORDER BY id DESC LIMIT 1");
-            $stmt->execute([$time, $lat, $lng, $image_name, $user_id, $date]);
+            $stmt->execute([$time_now, $lat, $lng, $image_name, $user_id, $date_today]);
             $msg = "Absen Pulang berhasil dicatat!";
         }
         
@@ -70,38 +112,33 @@ if (isset($_SESSION['toast_msg'])) {
 }
 
 // ==========================================
-// DATA DINAMIS ABSENSI, AKTIVITAS, SHIFT & LOKASI
+// 1. DATA DINAMIS SHIFT, LOKASI & WAJAH USER
 // ==========================================
 
-// Setup Tanggal Hari Ini
+// Setup Tanggal Hari Ini (UI)
 $hari = array("Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu");
 $bulan = array("","Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember");
-$date_now = $hari[date("w")] . ", " . date("j") . " " . $bulan[date("n")] . " " . date("Y");
+$date_now_ui = $hari[date("w")] . ", " . date("j") . " " . $bulan[date("n")] . " " . date("Y");
 
 // Default Fallback
 $shift_start = "--:--";
 $shift_end = "--:--";
 $shift_start_db = "08:00:00";
 $shift_end_db = "17:00:00";
-$is_geofence_enabled = 1; 
 $office_name = null;
 $office_lat = null;
 $office_lng = null;
 $office_radius = 50; 
-$user_face_descriptor = null; // Menampung wajah user
+$user_face_descriptor = null;
 
 $attendances = [];
 $activities = [];
 
-try {
-    // --- AMBIL PENGATURAN TENANT (MODE GEOFENCE) ---
-    $stmtSet = $pdo->prepare("SELECT is_geofence_enabled FROM tenant_settings WHERE tenant_id = ?");
-    $stmtSet->execute([$tenant_id]);
-    $setting = $stmtSet->fetch(PDO::FETCH_ASSOC);
-    if ($setting) {
-        $is_geofence_enabled = (int)$setting['is_geofence_enabled'];
-    }
+// Variabel Kontrol Status Tombol Absensi
+$has_clocked_in = false;
+$has_clocked_out = false;
 
+try {
     // --- AMBIL SHIFT, LOKASI & WAJAH USER ---
     $stmtUser = $pdo->prepare("
         SELECT s.start, s.end, l.name as location_name, l.latitude, l.longitude, l.radius, u.face_descriptor 
@@ -131,6 +168,17 @@ try {
         }
     }
 
+    // --- CEK STATUS ABSEN HARI INI (UNTUK DISABLED BUTTONS) ---
+    $stmtCheck = $pdo->prepare("SELECT clock_in_time, clock_out_time FROM attendances WHERE user_id = ? AND date = ? LIMIT 1");
+    $stmtCheck->execute([$user_id, $date_today]);
+    $todayRecord = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+    if ($todayRecord) {
+        $has_clocked_in = true;
+        if ($todayRecord['clock_out_time'] != null) {
+            $has_clocked_out = true;
+        }
+    }
+
     // --- RIWAYAT ABSENSI ---
     $stmtAtt = $pdo->prepare("SELECT * FROM attendances WHERE user_id = ? ORDER BY date DESC LIMIT 5");
     $stmtAtt->execute([$user_id]);
@@ -142,7 +190,6 @@ try {
     $activities = $stmtAct->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
-    // Fallback Mockup Data
     $shift_start = "08:00";
     $shift_end = "17:00";
 }
@@ -157,7 +204,7 @@ require_once __DIR__ . '/components/sidebar.php';
         
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-9999 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
+        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
             <i id="toastIcon" class="w-4 h-4"></i>
             <span id="toastMsg"></span>
         </div>
@@ -175,7 +222,7 @@ require_once __DIR__ . '/components/sidebar.php';
                             <i data-lucide="fingerprint" class="w-40 h-40 md:w-56 md:h-56 -mt-6 -mr-6"></i>
                         </div>
                         <div class="relative z-10">
-                            <p class="text-xs md:text-sm text-surface/80 mb-0.5"><?= $date_now ?></p>
+                            <p class="text-xs md:text-sm text-surface/80 mb-0.5"><?= $date_now_ui ?></p>
                             
                             <h2 class="text-3xl md:text-4xl font-bold mb-1 tracking-tight">
                                 <span id="realtimeClock">00:00</span> 
@@ -186,13 +233,30 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <i data-lucide="clock" class="w-3 h-3 inline-block -mt-0.5 mr-0.5"></i> Shift: <?= $shift_start ?> - <?= $shift_end ?>
                             </p>
                             
+                            <!-- LOGIKA DISABLED BUTTONS -->
                             <div class="flex gap-3 md:w-2/3 lg:w-1/2">
-                                <button onclick="openAttendance('in')" class="flex-1 bg-surface text-primary text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition shadow-sm active:scale-95">
-                                    <i data-lucide="log-in" class="w-4 h-4"></i> Masuk
-                                </button>
-                                <button onclick="openAttendance('out')" class="flex-1 bg-transparent border-2 border-surface/30 text-surface text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-surface/10 transition active:scale-95">
-                                    <i data-lucide="log-out" class="w-4 h-4"></i> Pulang
-                                </button>
+                                <!-- Tombol Masuk -->
+                                <?php if($has_clocked_in): ?>
+                                    <button disabled class="flex-1 bg-surface text-primary/40 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-sm opacity-80">
+                                        <i data-lucide="check-circle" class="w-4 h-4"></i> Masuk
+                                    </button>
+                                <?php else: ?>
+                                    <button onclick="openAttendance('in')" class="flex-1 bg-surface text-primary text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition shadow-sm active:scale-95">
+                                        <i data-lucide="log-in" class="w-4 h-4"></i> Masuk
+                                    </button>
+                                <?php endif; ?>
+
+                                <!-- Tombol Pulang -->
+                                <?php if($has_clocked_out || !$has_clocked_in): ?>
+                                    <!-- Disable Pulang jika sudah pulang, ATAU jika belum masuk sama sekali -->
+                                    <button disabled class="flex-1 bg-transparent border-2 border-surface/20 text-surface/50 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
+                                        <i data-lucide="<?= $has_clocked_out ? 'check-circle' : 'log-out' ?>" class="w-4 h-4"></i> <?= $has_clocked_out ? 'Selesai' : 'Pulang' ?>
+                                    </button>
+                                <?php else: ?>
+                                    <button onclick="openAttendance('out')" class="flex-1 bg-transparent border-2 border-surface/30 text-surface text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-surface/10 transition active:scale-95">
+                                        <i data-lucide="log-out" class="w-4 h-4"></i> Pulang
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </section>
@@ -430,7 +494,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     let cameraStream = null;
     let faceInterval = null;
-    let isProcessing = false;
+    let isProcessing = false; // Double-lock prevent duplicate API calls
 
     const attModal = document.getElementById('attendanceModal');
     const attOverlay = document.getElementById('attendanceOverlay');
@@ -479,7 +543,7 @@ require_once __DIR__ . '/components/sidebar.php';
             return;
         }
 
-        isProcessing = false;
+        isProcessing = false; // Reset lock
         attType.value = type;
         attTitle.innerText = type === 'in' ? 'Absen Masuk' : 'Absen Pulang';
         
@@ -578,8 +642,8 @@ require_once __DIR__ . '/components/sidebar.php';
                     // Cek Kecocokan Wajah dengan Database
                     const distance = faceapi.euclideanDistance(detection.descriptor, savedFaceDescriptor);
                     
-                    // Ambang batas kemiripan (semakin kecil semakin mirip, biasanya 0.4 - 0.5)
                     if(distance < 0.45) {
+                        if(isProcessing) return; // double-lock untuk mematikan request ganda
                         isProcessing = true;
                         clearInterval(faceInterval);
                         
@@ -595,7 +659,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
         } catch (error) {
             console.warn("Gagal load AI, bypass simulasi", error);
-            // Fallback jika tidak ada internet
             setTimeout(() => {
                 if(isProcessing) return;
                 isProcessing = true;
@@ -633,7 +696,7 @@ require_once __DIR__ . '/components/sidebar.php';
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    window.location.reload(); // Reload untuk memunculkan Toast dari PHP
+                    window.location.reload(); 
                 } else {
                     showToast(data.message, 'error');
                     closeAttendance();
@@ -646,7 +709,7 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 
     function closeAttendance() {
-        isProcessing = true; // Stop loop
+        isProcessing = true; 
         if (cameraStream) {
             cameraStream.getTracks().forEach(track => track.stop());
             video.srcObject = null;
