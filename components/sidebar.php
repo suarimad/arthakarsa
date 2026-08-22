@@ -3,9 +3,12 @@
 $current_page = basename($_SERVER['PHP_SELF'], '.php'); 
 // Jika halaman kosong (root), set sebagai index
 if ($current_page == '') $current_page = 'index';
+
+// Identifikasi Role String untuk kondisional render Menu
+$sb_role_name = strtolower($_SESSION['role'] ?? '');
 ?>
 <aside id="desktop-sidebar" class="hidden md:flex flex-col w-64 bg-surface border-r border-gray-200 z-20 shrink-0 transition-all duration-300 ease-in-out">
-    <div class="p-5 flex items-center gap-3 border-b border-gray-100">
+    <div class="p-5 flex items-center gap-3 border-b border-gray-100 shrink-0">
         <!-- Logo Perusahaan Dinamis -->
         <div class="w-8 h-8 rounded bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 ">
             <img src="<?= $logo_path . ($app_settings['logo'] ?? 'default_logo.png') ?>" alt="Logo" class="w-full h-full object-contain" onerror="this.src='https://ui-avatars.com/api/?name=HR&background=ea3800&color=fff'">
@@ -15,15 +18,15 @@ if ($current_page == '') $current_page = 'index';
         </h1>
     </div>
     
-    <!-- Menu Sidebar -->
-    <nav class="flex-1 p-3 space-y-1">
-        <!-- Beranda -->
-        <a href="<?= $base_url ?>/index" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'index') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+    <!-- Menu Sidebar (Scrollable area) -->
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto" style="scrollbar-width: thin;">
+        
+        <!-- ================= MENU DASAR ================= -->
+        <a href="<?= $base_url ?? '' ?>/index" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'index') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
             <i data-lucide="home" class="w-4 h-4"></i> Beranda
         </a>
         
-        <!-- Karyawan -->
-        <a href="<?= $base_url ?>/employee" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'employee') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+        <a href="<?= $base_url ?? '' ?>/employee" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'employee') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
             <i data-lucide="users" class="w-4 h-4"></i> Karyawan
         </a>
         
@@ -31,28 +34,112 @@ if ($current_page == '') $current_page = 'index';
         <a href="#" id="desktopRequestBtn" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
             <i data-lucide="plus-circle" class="w-4 h-4"></i> Pengajuan
         </a>
+
+        <!-- ================= EKSPLORASI FITUR ================= -->
+        <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Eksplorasi Fitur</div>
         
-        <!-- Menu Lain -->
-        <a href="menu" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
-            <i data-lucide="layout-grid" class="w-4 h-4"></i> Menu Lain
+        <a href="<?= $base_url ?? '' ?>/leave" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'leave') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="calendar-off" class="w-4 h-4"></i> Izin
         </a>
-        
-        <!-- Profil Saya -->
-        <a href="profile" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
-            <i data-lucide="user" class="w-4 h-4"></i> Profil Saya
+        <a href="<?= $base_url ?? '' ?>/overtime" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'overtime') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="clock-4" class="w-4 h-4"></i> Lembur
         </a>
+        <a href="<?= $base_url ?? '' ?>/reimbursement" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'reimbursement') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="receipt" class="w-4 h-4"></i> Reimburse
+        </a>
+        <a href="<?= $base_url ?? '' ?>/attendance" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'attendance') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="clipboard-list" class="w-4 h-4"></i> Log Absensi
+        </a>
+        <a href="<?= $base_url ?? '' ?>/payslip" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'payslip') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="banknote" class="w-4 h-4"></i> Slip Gaji
+        </a>
+        <a href="<?= $base_url ?? '' ?>/calendar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'calendar') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="calendar-days" class="w-4 h-4"></i> Kalender
+        </a>
+        <a href="<?= $base_url ?? '' ?>/review" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'review') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="star" class="w-4 h-4"></i> Review
+        </a>
+        <a href="<?= $base_url ?? '' ?>/project" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'project') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="briefcase" class="w-4 h-4"></i> Proyek
+        </a>
+
+        <!-- ================= ADMIN MENU ================= -->
+        <?php if (in_array($sb_role_name, ['admin', 'superadmin'])): ?>
+        <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Admin Menu</div>
+        <a href="<?= $base_url ?? '' ?>/setting_company" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'setting_company') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="building" class="w-4 h-4"></i> Perusahaan
+        </a>
+        <a href="<?= $base_url ?? '' ?>/setting_app" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'setting_app') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="settings" class="w-4 h-4"></i> Aplikasi
+        </a>
+        <a href="<?= $base_url ?? '' ?>/department" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'department') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="network" class="w-4 h-4"></i> Department
+        </a>
+        <a href="<?= $base_url ?? '' ?>/position" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'position') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="user-cog" class="w-4 h-4"></i> Posisi
+        </a>
+        <a href="<?= $base_url ?? '' ?>/location" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'location') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="map-pin" class="w-4 h-4"></i> Lokasi
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="clock" class="w-4 h-4"></i> Data Shift
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="shield" class="w-4 h-4"></i> Role Akses
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="server" class="w-4 h-4"></i> Tenant DB
+        </a>
+        <?php endif; ?>
+
+        <!-- ================= HR MENU ================= -->
+        <?php if ($sb_role_name === 'hr'): ?>
+        <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HR Menu</div>
+        <a href="<?= $base_url ?? '' ?>/hr_payslip" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'hr_payslip') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="file-text" class="w-4 h-4"></i> Slip Gaji
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Rekap Absensi
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="check-square" class="w-4 h-4"></i> Approval Cuti
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="hand-coins" class="w-4 h-4"></i> Kasbon Karyawan
+        </a>
+        <?php endif; ?>
+
+        <!-- ================= MANAGER MENU ================= -->
+        <?php if ($sb_role_name === 'manager'): ?>
+        <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Manager Menu</div>
+        <a href="<?= $base_url ?? '' ?>/review" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'review') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="star-half" class="w-4 h-4"></i> Employee Review
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="check-circle" class="w-4 h-4"></i> Approval Tim
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="pie-chart" class="w-4 h-4"></i> Laporan Proyek
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
+            <i data-lucide="timer" class="w-4 h-4"></i> Timesheet Tim
+        </a>
+        <?php endif; ?>
+
     </nav>
     
-    <div class="p-3 border-t border-gray-100">
-        <!-- Keluar -->
-        <a href="<?= $base_url ?>/logout" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-failed/10 hover:text-failed rounded-xl text-sm font-medium transition">
+    <!-- Profil & Keluar (Tetap diam di paling bawah tanpa perlu di-scroll) -->
+    <div class="p-3 border-t border-gray-100 space-y-1 shrink-0 bg-surface">
+        <a href="<?= $base_url ?? '' ?>/profile" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'profile') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="user" class="w-4 h-4"></i> Profil Saya
+        </a>
+        <a href="<?= $base_url ?? '' ?>/logout" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-failed/10 hover:text-failed rounded-xl text-sm font-medium transition">
             <i data-lucide="log-out" class="w-4 h-4"></i> Keluar
         </a>
     </div>
 </aside>
 
 <!-- ================= MODAL DESKTOP REQUEST ================= -->
-<!-- PENYESUAIAN: Menggunakan style manual untuk z-index memastikan ia berada di atas segalanya -->
 <div id="desktopRequestModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <!-- Overlay -->
     <div id="desktopRequestOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm"></div>
