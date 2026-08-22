@@ -51,12 +51,13 @@ $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst(
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
 // ==========================================
-// DETEKSI DEPARTEMEN USER SAAT INI
+// DETEKSI DEPARTEMEN USER SAAT INI (Diperbaiki Join Position)
 // ==========================================
 $stmtMe = $pdo->prepare("
-    SELECT u.department_id, d.name as department_name 
+    SELECT p.department_id, d.name as department_name 
     FROM users u 
-    LEFT JOIN departments d ON u.department_id = d.id 
+    LEFT JOIN positions p ON u.position_id = p.id
+    LEFT JOIN departments d ON p.department_id = d.id 
     WHERE u.id = ? AND u.tenant_id = ?
 ");
 $stmtMe->execute([$user_id, $tenant_id]);
@@ -72,15 +73,15 @@ $sql_main = "
            p.name as position_name, d.name as department_name 
     FROM users u 
     LEFT JOIN positions p ON u.position_id = p.id
-    LEFT JOIN departments d ON u.department_id = d.id
+    LEFT JOIN departments d ON p.department_id = d.id
     LEFT JOIN roles r ON u.role_id = r.id
     WHERE u.tenant_id = ? AND u.deleted_at IS NULL
 ";
 $params_main = [$tenant_id];
 
-// Jika user punya departemen, filter hanya teman satu departemen
+// Jika user punya departemen, filter berdasarkan p.department_id
 if ($my_dept_id) {
-    $sql_main .= " AND u.department_id = ?";
+    $sql_main .= " AND p.department_id = ?";
     $params_main[] = $my_dept_id;
 }
 
@@ -106,15 +107,16 @@ $today_date = date('Y-m-d');
 $sql_absent = "
     SELECT u.id, u.name, u.avatar 
     FROM users u 
+    LEFT JOIN positions p ON u.position_id = p.id
     WHERE u.tenant_id = ? 
       AND u.deleted_at IS NULL 
       AND u.id != ? 
 ";
 $params_absent = [$tenant_id, $user_id];
 
-// Filter teman satu departemen untuk status absen
+// Filter teman satu departemen
 if ($my_dept_id) {
-    $sql_absent .= " AND u.department_id = ?";
+    $sql_absent .= " AND p.department_id = ?";
     $params_absent[] = $my_dept_id;
 }
 
