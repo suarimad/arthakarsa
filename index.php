@@ -59,7 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             $data = base64_decode($data);
             $image_name = 'att_' . $user_id . '_' . time() . '.jpg';
             
-            // Perubahan path ke assets/img/attendances/
             $upload_dir = __DIR__ . '/assets/img/attendances';
             if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
             file_put_contents($upload_dir . '/' . $image_name, $data);
@@ -72,7 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 
         // 2. Simpan ke Tabel attendances
         if ($type === 'in') {
-            // Mencegah duplicate entry Clock In
             if ($todayAtt) {
                 echo json_encode(['status' => 'success', 'message' => 'Anda sudah absen masuk hari ini.']);
                 exit;
@@ -86,14 +84,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             $msg = "Absen Masuk berhasil dicatat!";
 
         } else {
-            // Mencegah duplicate entry Clock Out
             if ($todayAtt && $todayAtt['clock_out_time'] != null) {
                 echo json_encode(['status' => 'success', 'message' => 'Anda sudah absen pulang hari ini.']);
                 exit;
             }
 
-            $stmt = $pdo->prepare("UPDATE attendances SET clock_out_time = ?, clock_out_lat = ?, clock_out_lng = ?, clock_out_image = ?, clock_out_liveness_status = 'Valid', clock_out_status = 'on_time' WHERE user_id = ? AND date = ? ORDER BY id DESC LIMIT 1");
-            $stmt->execute([$time_now, $lat, $lng, $image_name, $user_id, $date_today]);
+            // Hitung Total Jam Kerja
+            $work_hours_str = null;
+            if ($todayAtt && !empty($todayAtt['clock_in_time'])) {
+                $in_stamp = strtotime($todayAtt['clock_in_time']);
+                $out_stamp = strtotime($time_now);
+                $diff_minutes = floor(($out_stamp - $in_stamp) / 60);
+                $hours = floor($diff_minutes / 60);
+                $minutes = $diff_minutes % 60;
+                $work_hours_str = "{$hours}j {$minutes}m";
+            }
+
+            // Mengupdate dan menyimpan total jam kerja
+            $stmt = $pdo->prepare("UPDATE attendances SET clock_out_time = ?, clock_out_lat = ?, clock_out_lng = ?, clock_out_image = ?, clock_out_liveness_status = 'Valid', clock_out_status = 'on_time', work_hours = ? WHERE user_id = ? AND date = ? ORDER BY id DESC LIMIT 1");
+            $stmt->execute([$time_now, $lat, $lng, $image_name, $work_hours_str, $user_id, $date_today]);
             $msg = "Absen Pulang berhasil dicatat!";
         }
         
@@ -104,15 +113,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
     }
     exit;
-}
-
-// Menangkap Pesan Toast Global dari Reload
-$toast_msg = '';
-$toast_type = '';
-if (isset($_SESSION['toast_msg'])) {
-    $toast_msg = $_SESSION['toast_msg'];
-    $toast_type = $_SESSION['toast_type'] ?? 'info';
-    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
 }
 
 // ==========================================
@@ -141,6 +141,7 @@ $activities = [];
 // Variabel Kontrol Status Tombol Absensi
 $has_clocked_in = false;
 $has_clocked_out = false;
+$is_late_today = false; // Penanda munculnya badge terlambat
 
 try {
     // --- AMBIL SHIFT, LOKASI & WAJAH USER ---
@@ -172,14 +173,20 @@ try {
         }
     }
 
-    // --- CEK STATUS ABSEN HARI INI (UNTUK DISABLED BUTTONS) ---
+    // --- CEK STATUS ABSEN HARI INI (UNTUK DISABLED BUTTONS & BADGE LATE) ---
     $stmtCheck = $pdo->prepare("SELECT clock_in_time, clock_out_time FROM attendances WHERE user_id = ? AND date = ? LIMIT 1");
     $stmtCheck->execute([$user_id, $date_today]);
     $todayRecord = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+    
     if ($todayRecord) {
         $has_clocked_in = true;
         if ($todayRecord['clock_out_time'] != null) {
             $has_clocked_out = true;
+        }
+    } else {
+        // Jika belum absen, cek apakah waktu saat ini melebihi jam masuk shift
+        if (strtotime($current_time_only) > strtotime($shift_start_db)) {
+            $is_late_today = true;
         }
     }
 
@@ -208,11 +215,6 @@ require_once __DIR__ . '/components/sidebar.php';
         
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
-        </div>
-
         <!-- DASHBOARD CONTENT -->
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2">
             <div class="md:grid md:grid-cols-3 md:gap-6">
@@ -233,11 +235,20 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <span class="text-sm md:text-base font-normal text-surface/80">WIB</span>
                             </h2>
                             
-                            <p class="text-[10px] md:text-xs text-surface/90 mb-6 bg-surface/20 inline-block px-2.5 py-1 rounded-md font-medium">
-                                <i data-lucide="clock" class="w-3 h-3 inline-block -mt-0.5 mr-0.5"></i> Shift: <?= $shift_start ?> - <?= $shift_end ?>
-                            </p>
+                            <!-- Area Info Shift & Badge Terlambat -->
+                            <div class="flex flex-col items-start gap-2 mb-6 mt-1">
+                                <p class="text-[10px] md:text-xs text-surface/90 bg-surface/20 inline-block px-2.5 py-1 rounded-md font-medium">
+                                    <i data-lucide="clock" class="w-3 h-3 inline-block -mt-0.5 mr-0.5"></i> Shift: <?= $shift_start ?> - <?= $shift_end ?>
+                                </p>
+                                
+                                <?php if ($is_late_today): ?>
+                                    <span class="bg-surface text-failed px-2.5 py-1 rounded-md text-[10px] font-bold shadow-sm animate-pulse flex items-center gap-1">
+                                        <i data-lucide="alert-circle" class="w-3 h-3"></i> Anda Terlambat
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             
-                            <!-- LOGIKA DISABLED BUTTONS (Warna Terlihat Jelas Namun Disabled) -->
+                            <!-- LOGIKA DISABLED BUTTONS -->
                             <div class="flex gap-3 md:w-2/3 lg:w-1/2">
                                 <!-- Tombol Masuk -->
                                 <?php if($has_clocked_in): ?>
@@ -252,7 +263,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
                                 <!-- Tombol Pulang -->
                                 <?php if($has_clocked_out || !$has_clocked_in): ?>
-                                    <!-- Disable Pulang jika sudah pulang, ATAU jika belum masuk sama sekali -->
                                     <button disabled class="flex-1 bg-transparent border-2 border-white/20 text-white/50 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
                                         <i data-lucide="<?= $has_clocked_out ? 'check-circle' : 'log-out' ?>" class="w-4 h-4"></i> <?= $has_clocked_out ? 'Selesai' : 'Pulang' ?>
                                     </button>
@@ -282,7 +292,14 @@ require_once __DIR__ . '/components/sidebar.php';
                                     $time_in = isset($att['clock_in_time']) ? date('H:i', strtotime($att['clock_in_time'])) : '--:--';
                                     $time_out = isset($att['clock_out_time']) ? date('H:i', strtotime($att['clock_out_time'])) : '--:--';
                                     
-                                    // Logika Status Berdasarkan String yang tersimpan di DB
+                                    // Mengambil Work Hours dari DB atau fallback jika datanya lama
+                                    $work_duration = $att['work_hours'] ?? '';
+                                    if(empty($work_duration) && isset($att['clock_in_time']) && isset($att['clock_out_time'])) {
+                                        $diff_m = floor((strtotime($att['clock_out_time']) - strtotime($att['clock_in_time'])) / 60);
+                                        $work_duration = floor($diff_m/60) . "j " . ($diff_m%60) . "m";
+                                    }
+
+                                    // Logika Status Keterlambatan
                                     $db_status = strtolower($att['clock_in_status'] ?? '');
                                     if($db_status === 'late' || $db_status === 'terlambat') {
                                         $status_label = "Terlambat";
@@ -300,13 +317,20 @@ require_once __DIR__ . '/components/sidebar.php';
                                         </div>
                                         <div>
                                             <p class="text-[11px] text-gray-500 font-medium"><?= $hari[date('w', strtotime($att['date']))] ?></p>
-                                            <div class="flex items-center gap-2 mt-0.5">
+                                            <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                                                 <span class="text-xs font-semibold text-gray-800 flex items-center gap-1">
                                                     <i data-lucide="log-in" class="w-3 h-3 text-success"></i> <?= $time_in ?>
                                                 </span>
                                                 <span class="text-gray-300 text-[10px]">-</span>
                                                 <span class="text-xs font-semibold text-gray-800 flex items-center gap-1">
                                                     <i data-lucide="log-out" class="w-3 h-3 text-failed"></i> <?= $time_out ?>
+                                                    
+                                                    <!-- Badge Total Jam Kerja di sebelah waktu pulang -->
+                                                    <?php if($work_duration): ?>
+                                                        <span class="text-[9px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded-md ml-1">
+                                                            <?= $work_duration ?>
+                                                        </span>
+                                                    <?php endif; ?>
                                                 </span>
                                             </div>
                                         </div>
@@ -394,13 +418,11 @@ require_once __DIR__ . '/components/sidebar.php';
                 </div>
             </div>
 
-            <!-- Bagian Bawah Modal -->
             <div class="p-4 bg-gray-50 text-center">
                 <input type="hidden" id="attType" value="">
                 <input type="hidden" id="attLat" value="">
                 <input type="hidden" id="attLng" value="">
                 
-                <!-- Disclaimer -->
                 <p class="text-[10px] text-gray-500 font-medium italic flex items-center justify-center gap-1.5">
                     <i data-lucide="shield-check" class="w-3.5 h-3.5 text-success"></i> 
                     Disclaimer: Foto tidak akan disimpan
@@ -444,42 +466,14 @@ require_once __DIR__ . '/components/sidebar.php';
 <!-- Load Bottom Nav (Mobile) -->
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
+<!-- Memanggil Komponen Toast Global Saja -->
+<?php require_once __DIR__ . '/components/toast.php'; ?>
+
 <!-- Script Face API -->
 <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
 <script>
     lucide.createIcons();
-
-    // ==========================================
-    // TOAST NOTIFICATION SYSTEM
-    // ==========================================
-    function showToast(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
-
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
-        }
-        lucide.createIcons();
-
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-    }
-
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) showToast(phpMsg, phpType);
 
     // ==========================================
     // JAM REALTIME
@@ -544,13 +538,12 @@ require_once __DIR__ . '/components/sidebar.php';
     function deg2rad(deg) { return deg * (Math.PI/180); }
 
     function openAttendance(type) {
-        // Cek Pendaftaran Wajah
         if(!savedFaceDescriptor) {
-            showToast('Wajah belum terdaftar. Silakan daftar di menu Profil terlebih dahulu!', 'error');
+            window.showToast('Wajah belum terdaftar. Silakan daftar di menu Profil terlebih dahulu!', 'error');
             return;
         }
 
-        isProcessing = false; // Reset lock
+        isProcessing = false; 
         attType.value = type;
         attTitle.innerText = type === 'in' ? 'Absen Masuk' : 'Absen Pulang';
         
@@ -569,7 +562,6 @@ require_once __DIR__ . '/components/sidebar.php';
             attCard.classList.add('scale-100', 'opacity-100');
         }, 10);
 
-        // Nyalakan Kamera
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(function(stream) {
@@ -577,14 +569,13 @@ require_once __DIR__ . '/components/sidebar.php';
                 video.srcObject = stream;
             })
             .catch(function(err) {
-                showToast('Akses kamera ditolak atau tidak tersedia.', 'error');
+                window.showToast('Akses kamera ditolak atau tidak tersedia.', 'error');
                 locStatus.innerHTML = "Kamera tidak aktif!";
                 locStatus.classList.remove('animate-pulse');
                 locStatus.classList.add('text-failed');
             });
         }
 
-        // Cek GPS & Geofence
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 function(position) {
@@ -604,7 +595,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                 locStatus.classList.remove('animate-pulse');
                             } else {
                                 locStatus.innerHTML = `<span class="text-success font-bold">Lokasi Valid (${distanceRounded}m)</span><br>Memindai dan mencocokkan wajah...`;
-                                startFaceDetection(); // Mulai Scan Wajah Otomatis!
+                                startFaceDetection();
                             }
                         } else {
                             locStatus.innerHTML = `<span class="text-failed font-bold">Akses Ditolak</span><br>Lokasi kantor belum diatur oleh HRD.`;
@@ -612,7 +603,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         }
                     } else {
                         locStatus.innerHTML = `<span class="text-success font-bold">Mode WFA</span><br>Memindai dan mencocokkan wajah...`;
-                        startFaceDetection(); // Mulai Scan Wajah Otomatis!
+                        startFaceDetection(); 
                     }
                 },
                 function(error) {
@@ -646,18 +637,17 @@ require_once __DIR__ . '/components/sidebar.php';
                 const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
                 
                 if (detection) {
-                    // Cek Kecocokan Wajah dengan Database
                     const distance = faceapi.euclideanDistance(detection.descriptor, savedFaceDescriptor);
                     
                     if(distance < 0.45) {
-                        if(isProcessing) return; // double-lock untuk mematikan request ganda
+                        if(isProcessing) return;
                         isProcessing = true;
                         clearInterval(faceInterval);
                         
                         locStatus.innerHTML = `<span class="text-success font-bold">Wajah Cocok!</span><br>Mengirim data absensi...`;
                         locStatus.classList.remove('animate-pulse');
                         
-                        autoCaptureAndSubmit(); // EKSEKUSI OTOMATIS
+                        autoCaptureAndSubmit(); 
                     } else {
                         locStatus.innerHTML = `<span class="text-failed font-bold">Wajah Tidak Dikenali!</span><br>Bukan pemilik akun.`;
                     }
@@ -677,7 +667,6 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 
     function autoCaptureAndSubmit() {
-        // Ambil Foto dari Canvas di Background
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -689,7 +678,6 @@ require_once __DIR__ . '/components/sidebar.php';
         
         const base64Image = canvas.toDataURL('image/jpeg', 0.8);
 
-        // Kirim via AJAX
         const formData = new FormData();
         formData.append('ajax_action', 'attendance');
         formData.append('type', attType.value); 
@@ -705,12 +693,12 @@ require_once __DIR__ . '/components/sidebar.php';
                 if (data.status === 'success') {
                     window.location.reload(); 
                 } else {
-                    showToast(data.message, 'error');
+                    window.showToast(data.message, 'error');
                     closeAttendance();
                 }
             })
             .catch(() => {
-                showToast('Gagal terhubung ke server', 'error');
+                window.showToast('Gagal terhubung ke server', 'error');
                 closeAttendance();
             });
     }

@@ -19,7 +19,8 @@ if (isset($_SESSION['toast_msg']) && $_SESSION['toast_msg'] !== '') {
 
 <!-- 2. HTML KOMPONEN TOAST -->
 <!-- pointer-events-none: agar toast tidak menghalangi klik jika menutupi elemen lain -->
-<div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium w-[92vw] md:w-auto md:max-w-md pointer-events-none">
+<!-- w-[80%]: Membuat lebar 80% pada mobile -->
+<div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium w-[80%] md:w-auto md:max-w-md pointer-events-none">
     <i id="toastIcon" class="w-4 h-4 shrink-0"></i>
     <span id="toastMsg" class="flex-1 truncate"></span>
 </div>
@@ -37,18 +38,18 @@ if (isset($_SESSION['toast_msg']) && $_SESSION['toast_msg'] !== '') {
 
             msgEl.textContent = msg;
             
-            // Reset class untuk berjaga-jaga
-            toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium w-[92vw] md:w-auto md:max-w-md pointer-events-none';
+            // Reset class untuk berjaga-jaga (menggunakan w-[80%] untuk mobile)
+            toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium w-[80%] md:w-auto md:max-w-md pointer-events-none';
 
-            // Set warna & ikon berdasarkan tipe
+            // Set warna solid pekat (tidak transparan) & ikon berdasarkan tipe
             if (type === 'failed' || type === 'error') {
-                toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
+                toast.classList.add('bg-failed', 'text-white', 'border-failed');
                 iconEl.setAttribute('data-lucide', 'alert-circle');
             } else if (type === 'warning') {
-                toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
+                toast.classList.add('bg-pending', 'text-white', 'border-pending');
                 iconEl.setAttribute('data-lucide', 'alert-triangle');
             } else {
-                toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
+                toast.classList.add('bg-success', 'text-white', 'border-success');
                 iconEl.setAttribute('data-lucide', 'check-circle');
             }
             
