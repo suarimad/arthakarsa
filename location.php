@@ -26,7 +26,7 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
             $id = $_GET['location_id'];
             
             // Hitung total karyawan di lokasi ini
-            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users FROM users WHERE location_id = ? AND tenant_id = ?");
+            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users FROM users WHERE location_id = ? AND tenant_id = ? AND deleted_at IS NULL");
             $stmt->execute([$id, $tenant_id]);
             $res = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -287,7 +287,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     // TOAST NOTIFICATION SYSTEM
     // ==========================================
-    function showToast(msg, type) {
+    window.showToast = function(msg, type) {
         const toast = document.getElementById('toast');
         const msgEl = document.getElementById('toastMsg');
         const iconEl = document.getElementById('toastIcon');
@@ -313,7 +313,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
     const phpMsg = <?= json_encode($toast_msg) ?>;
     const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) showToast(phpMsg, phpType);
+    if (phpMsg) window.showToast(phpMsg, phpType);
 
     // ==========================================
     // LOKAL SEARCH JS (Tanpa Loading/AJAX)
@@ -335,6 +335,51 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 
     // ==========================================
+    // DETEKSI LOKASI (GEOLOCATION API)
+    // ==========================================
+    window.detectLocation = function(btn) {
+        if (!navigator.geolocation) {
+            window.showToast("Browser Anda tidak mendukung deteksi lokasi.", "error");
+            return;
+        }
+
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Mendeteksi...';
+        btn.disabled = true;
+        lucide.createIcons();
+
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                document.getElementById('inputLat').value = lat;
+                document.getElementById('inputLng').value = lng;
+                
+                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Berhasil';
+                btn.classList.replace('text-primary', 'text-success');
+                btn.classList.replace('bg-primary/10', 'bg-success/10');
+                lucide.createIcons();
+
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                    btn.classList.replace('text-success', 'text-primary');
+                    btn.classList.replace('bg-success/10', 'bg-primary/10');
+                    lucide.createIcons();
+                }, 2500);
+            },
+            function(error) {
+                window.showToast("Gagal mengambil lokasi. Pastikan GPS aktif dan izin diberikan.", "error");
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                lucide.createIcons();
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
+    // ==========================================
     // HYBRID MODAL CRUD AJAX (DESKTOP & MOBILE)
     // ==========================================
     const crudModal = document.getElementById('crudModal');
@@ -345,7 +390,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // Pindahkan modal ke body agar z-index bekerja absolut di luar sidebar
     document.body.appendChild(crudModal);
 
-    function openCrud(action, id = '', name = '', lat = '', lng = '', rad = 50) {
+    window.openCrud = function(action, id = '', name = '', lat = '', lng = '', rad = 50) {
         // 1. Generate HTML berdasarkan aksi
         let html = '';
         if (action === 'add' || action === 'edit') {
@@ -362,16 +407,25 @@ require_once __DIR__ . '/components/sidebar.php';
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nama Lokasi (Kantor)</label>
                             <input type="text" name="name" value="${name}" required placeholder="Misal: Kantor Pusat Jakarta" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Latitude</label>
-                                <input type="number" step="any" name="latitude" value="${lat}" required placeholder="-6.1753924" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
+                        
+                        <div class="relative pt-2 pb-2">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label class="block text-[10px] font-semibold text-gray-600 uppercase">Titik Koordinat</label>
+                                <button type="button" onclick="detectLocation(this)" class="text-[10px] bg-primary/10 text-primary px-2.5 py-1.5 rounded-lg flex items-center gap-1 hover:bg-primary hover:text-surface transition active:scale-95">
+                                    <i data-lucide="crosshair" class="w-3 h-3"></i> Gunakan Lokasi Saat Ini
+                                </button>
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Longitude</label>
-                                <input type="number" step="any" name="longitude" value="${lng}" required placeholder="106.8271528" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <input type="number" step="any" name="latitude" id="inputLat" value="${lat}" required placeholder="Latitude" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
+                                </div>
+                                <div>
+                                    <input type="number" step="any" name="longitude" id="inputLng" value="${lng}" required placeholder="Longitude" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
+                                </div>
                             </div>
                         </div>
+
                         <div>
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Radius Toleransi (Meter)</label>
                             <input type="number" name="radius" value="${rad}" required placeholder="50" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
@@ -472,13 +526,13 @@ require_once __DIR__ . '/components/sidebar.php';
                         if (data.status === 'success') {
                             window.location.reload();
                         } else {
-                            showToast(data.message || 'Terjadi kesalahan sistem', 'error');
+                            window.showToast(data.message || 'Terjadi kesalahan sistem', 'error');
                             btn.innerHTML = 'Coba Lagi';
                             btn.disabled = false;
                         }
                     })
                     .catch(() => {
-                        showToast('Gagal terhubung ke server', 'error');
+                        window.showToast('Gagal terhubung ke server', 'error');
                         btn.innerHTML = 'Coba Lagi';
                         btn.disabled = false;
                     });
@@ -486,7 +540,7 @@ require_once __DIR__ . '/components/sidebar.php';
         }
     }
 
-    function closeCrud() {
+    window.closeCrud = function() {
         crudOverlay.classList.add('opacity-0');
         
         // Tutup Animasi Mobile
