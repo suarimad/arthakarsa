@@ -47,7 +47,6 @@ if (isset($_SESSION['toast_msg'])) {
 
 // Ambil data user terbaru dari database (Termasuk department, position, dan role)
 try {
-    // PERBAIKAN: Menghapus u.role dan menambahkan JOIN ke tabel roles
     $stmt = $pdo->prepare("
         SELECT u.name, u.email, u.face_descriptor, 
                p.name as position_name, d.name as department_name, 
@@ -79,7 +78,7 @@ try {
         $tenant_name_display = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
     }
 } catch (Exception $e) {
-    // Menangkap error jika SQL gagal (contohnya saat kolom u.role tadi tidak ada)
+    // Menangkap error jika SQL gagal
     $user_name = $_SESSION['user_name'] ?? 'User';
     $user_email = '';
     $user_pos = $_SESSION['position_name'] ?? 'Belum ada jabatan';
@@ -101,8 +100,8 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- MAIN CONTENT AREA (Ditambahkan ID untuk Pull to Refresh) -->
 <div id="main-scroll-container" class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
-    <!-- Diubah pb-36 agar bottom nav tidak menutupi tombol logout -->
-    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-36 md:pb-8 md:px-6 relative z-0">
+    <!-- Diubah pb-48 agar bottom nav benar-benar tidak menutupi tombol logout di mobile -->
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-48 md:pb-8 md:px-6 relative z-0">
         
         <!-- PULL TO REFRESH INDICATOR (Tampil saat ditarik di mobile, z-0 agar tidak menimpa header) -->
         <div id="ptr-indicator" class="w-full flex justify-center items-center h-0 overflow-hidden transition-all duration-300 absolute top-0 left-0 right-0 z-0">
