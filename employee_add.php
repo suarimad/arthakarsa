@@ -4,6 +4,7 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
 // Guard: Hanya admin & superadmin
+// (Ini tetap berfungsi karena di login_process.php $_SESSION['role'] menyimpan string nama role)
 if (!in_array($_SESSION['role'], ['admin', 'superadmin'])) {
     $_SESSION['toast_msg'] = "Anda tidak memiliki akses ke halaman ini.";
     $_SESSION['toast_type'] = "failed";
@@ -19,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $role = $_POST['role'] ?? 'employee';
+    $role = $_POST['role'] ?? 'employee'; // Valuenya berupa string: 'employee', 'manager', 'admin'
 
     if (empty($name) || empty($email) || empty($password)) {
         $toast_msg = "Semua kolom wajib diisi!";
@@ -33,7 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $toast_type = "failed";
             } else {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO users (tenant_id, role, name, email, password) VALUES (?, ?, ?, ?, ?)");
+                
+                // PENYESUAIAN QUERY: Mengganti kolom 'role' menjadi 'role_id' 
+                // dan menggunakan Subquery untuk mengambil ID dari tabel roles berdasarkan string yang dikirim dari form
+                $stmt = $pdo->prepare("
+                    INSERT INTO users (tenant_id, role_id, name, email, password) 
+                    VALUES (?, (SELECT id FROM roles WHERE name = ? LIMIT 1), ?, ?, ?)
+                ");
                 $stmt->execute([$tenant_id, $role, $name, $email, $hashed_password]);
 
                 $_SESSION['toast_msg'] = "Karyawan $name berhasil ditambahkan!";
@@ -49,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $user_name = $_SESSION['user_name'] ?? 'User';
-$user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
+// PENYESUAIAN: Menambahkan $_SESSION['role_display'] agar sinkron dengan update sebelumnya
+$user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan';
 
 require_once __DIR__ . '/components/head.php';

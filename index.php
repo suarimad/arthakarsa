@@ -13,7 +13,7 @@ $user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employe
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
 // ==========================================
-// 1. DATA DINAMIS ABSENSI & AKTIVITAS
+// 1. DATA DINAMIS ABSENSI, AKTIVITAS & SHIFT
 // ==========================================
 
 // Setup Tanggal Hari Ini (Format Indonesia)
@@ -21,16 +21,49 @@ $hari = array("Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu");
 $bulan = array("","Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember");
 $date_now = $hari[date("w")] . ", " . date("j") . " " . $bulan[date("n")] . " " . date("Y");
 
-// Data Shift User Hari ini (Bisa diambil dari database shift, disimulasikan di sini)
-$shift_start = "08:00";
-$shift_end = "17:00";
+// Default Fallback
+$shift_start = "--:--";
+$shift_end = "--:--";
+$is_geofence_enabled = 1; // Default strict
+$office_lat = null;
+$office_lng = null;
+$office_radius = 50; // Default radius
 
-// Array penampung
 $attendances = [];
 $activities = [];
 
 try {
-    // Coba ambil dari database jika tabel sudah ada
+    // --- AMBIL PENGATURAN TENANT ---
+    $stmtSet = $pdo->prepare("SELECT is_geofence_enabled FROM tenant_settings WHERE tenant_id = ?");
+    $stmtSet->execute([$tenant_id]);
+    $setting = $stmtSet->fetch(PDO::FETCH_ASSOC);
+    if ($setting) {
+        $is_geofence_enabled = (int)$setting['is_geofence_enabled'];
+    }
+
+    // --- AMBIL SHIFT & LOKASI USER AKTIF ---
+    $stmtUser = $pdo->prepare("
+        SELECT s.start, s.end, l.latitude, l.longitude, l.radius 
+        FROM users u 
+        LEFT JOIN shifts s ON u.shift_id = s.id 
+        LEFT JOIN locations l ON u.location_id = l.id
+        WHERE u.id = ?
+    ");
+    $stmtUser->execute([$user_id]);
+    $userData = $stmtUser->fetch(PDO::FETCH_ASSOC);
+    
+    if ($userData) {
+        if ($userData['start'] && $userData['end']) {
+            $shift_start = date('H:i', strtotime($userData['start']));
+            $shift_end = date('H:i', strtotime($userData['end']));
+        }
+        if ($userData['latitude'] && $userData['longitude']) {
+            $office_lat = $userData['latitude'];
+            $office_lng = $userData['longitude'];
+            $office_radius = (int)$userData['radius'];
+        }
+    }
+
     // --- RIWAYAT ABSENSI ---
     $stmtAtt = $pdo->prepare("SELECT * FROM attendances WHERE user_id = ? ORDER BY date DESC LIMIT 5");
     $stmtAtt->execute([$user_id]);
@@ -42,45 +75,18 @@ try {
     $activities = $stmtAct->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
-    // JIKA TABEL BELUM DIBUAT, KITA GUNAKAN MOCKUP DATA (Mencegah Crash)
+    // Fallback Mockup Data
+    $shift_start = "08:00";
+    $shift_end = "17:00";
     
-    // Mockup Absensi
     $attendances = [
         [
             'date' => date('Y-m-d', strtotime('-1 days')), 
             'clock_in_time' => '07:55:00', 'clock_out_time' => '17:10:00', 
             'clock_in_status' => 'on_time'
-        ],
-        [
-            'date' => date('Y-m-d', strtotime('-2 days')), 
-            'clock_in_time' => '08:15:00', 'clock_out_time' => '17:05:00', 
-            'clock_in_status' => 'late'
-        ]
-    ];
-
-    // Mockup Aktivitas
-    $activities = [
-        [
-            'title' => 'Cuti Disetujui', 
-            'description' => 'Cuti tahunan 20-22 Agustus disetujui atasan.',
-            'icon' => 'check-circle-2', 'icon_color_class' => 'text-success', 'icon_bg_class' => 'bg-success/10',
-            'created_at' => date('Y-m-d H:i:s', strtotime('-2 hours'))
-        ],
-        [
-            'title' => 'Slip Gaji Terbit', 
-            'description' => 'Slip gaji bulan Juli 2026 sudah dapat diunduh.',
-            'icon' => 'banknote', 'icon_color_class' => 'text-primary', 'icon_bg_class' => 'bg-primary/10',
-            'created_at' => date('Y-m-d H:i:s', strtotime('-1 days'))
-        ],
-        [
-            'title' => 'Pengumuman Perusahaan', 
-            'description' => 'Besok akan diadakan kegiatan senam pagi bersama di lobi.',
-            'icon' => 'megaphone', 'icon_color_class' => 'text-pending', 'icon_bg_class' => 'bg-pending/10',
-            'created_at' => date('Y-m-d H:i:s', strtotime('-2 days'))
         ]
     ];
 }
-
 
 // 1. Load Head 
 require_once __DIR__ . '/components/head.php';
@@ -109,27 +115,22 @@ require_once __DIR__ . '/components/sidebar.php';
                             <i data-lucide="fingerprint" class="w-40 h-40 md:w-56 md:h-56 -mt-6 -mr-6"></i>
                         </div>
                         <div class="relative z-10">
-                            <!-- Tanggal Dinamis -->
                             <p class="text-xs md:text-sm text-surface/80 mb-0.5"><?= $date_now ?></p>
                             
-                            <!-- Jam Realtime (Digerakkan via JS) -->
                             <h2 class="text-3xl md:text-4xl font-bold mb-1 tracking-tight">
                                 <span id="realtimeClock">00:00</span> 
                                 <span class="text-sm md:text-base font-normal text-surface/80">WIB</span>
                             </h2>
                             
-                            <!-- Jadwal Shift -->
                             <p class="text-[10px] md:text-xs text-surface/90 mb-6 bg-surface/20 inline-block px-2.5 py-1 rounded-md font-medium">
                                 <i data-lucide="clock" class="w-3 h-3 inline-block -mt-0.5 mr-0.5"></i> Shift: <?= $shift_start ?> - <?= $shift_end ?>
                             </p>
                             
-                            <!-- Tombol Absen (Clock In & Clock Out) -->
                             <div class="flex gap-3 md:w-2/3 lg:w-1/2">
-                                <button class="flex-1 bg-surface text-primary text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition shadow-sm active:scale-95">
+                                <button onclick="openAttendance('in')" class="flex-1 bg-surface text-primary text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition shadow-sm active:scale-95">
                                     <i data-lucide="log-in" class="w-4 h-4"></i> Masuk
                                 </button>
-                                <!-- Tombol Pulang (Bisa diberi warna abu-abu kemerahan / transparan border putih tergantung status) -->
-                                <button class="flex-1 bg-transparent border-2 border-surface/30 text-surface text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-surface/10 transition active:scale-95">
+                                <button onclick="openAttendance('out')" class="flex-1 bg-transparent border-2 border-surface/30 text-surface text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-surface/10 transition active:scale-95">
                                     <i data-lucide="log-out" class="w-4 h-4"></i> Pulang
                                 </button>
                             </div>
@@ -163,7 +164,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                 ?>
                                 <div class="bg-surface border border-gray-100 rounded-xl p-3 md:p-4 shadow-sm flex items-center justify-between transition hover:border-gray-200 cursor-pointer">
                                     <div class="flex items-center gap-3">
-                                        <!-- Kotak Tanggal -->
                                         <div class="w-11 h-11 rounded-xl bg-gray-50 flex flex-col items-center justify-center border border-gray-100 shrink-0">
                                             <span class="text-[9px] text-gray-500 font-medium uppercase"><?= date('M', strtotime($att['date'])) ?></span>
                                             <span class="text-xs font-bold text-gray-800"><?= date('d', strtotime($att['date'])) ?></span>
@@ -203,7 +203,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                 </div>
                             <?php else: ?>
                                 <?php foreach($activities as $act): 
-                                    // Hitung waktu (Contoh sederhana)
                                     $time_diff = time() - strtotime($act['created_at']);
                                     $time_str = "baru saja";
                                     if($time_diff > 86400) $time_str = floor($time_diff/86400) . "h lalu";
@@ -233,15 +232,62 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
+<!-- ================= MODAL ABSENSI (GPS & KAMERA) ================= -->
+<div id="attendanceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
+    <!-- Overlay (Sekarang ditambahkan onclick untuk close) -->
+    <div id="attendanceOverlay" onclick="closeAttendance()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    
+    <!-- Modal Container -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
+        <div id="attendanceCard" class="bg-surface w-full max-w-sm rounded-3xl shadow-2xl transform scale-95 opacity-0 transition-all duration-300 pointer-events-auto relative overflow-hidden flex flex-col">
+            
+            <!-- Header Modal -->
+            <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div>
+                    <h3 class="text-sm font-bold text-gray-800" id="attendanceTitle">Absen Masuk</h3>
+                    <p class="text-[10px] text-gray-500 font-medium" id="attendanceTime">--:-- WIB</p>
+                </div>
+                <button onclick="closeAttendance()" class="text-gray-400 hover:text-failed hover:bg-failed/10 transition p-1.5 rounded-full">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Area Feed Kamera & Status Lokasi -->
+            <div class="relative bg-black aspect-[3/4] w-full flex items-center justify-center overflow-hidden">
+                <video id="cameraStream" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+                
+                <!-- Overlay Status Pencarian GPS -->
+                <div class="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10">
+                    <div class="flex items-start gap-2">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[10px] text-white/70 font-medium mb-0.5">Status Lokasi</p>
+                            <p id="locationStatus" class="text-xs text-white font-semibold leading-tight animate-pulse">Mencari kordinat GPS...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Area Tombol Aksi -->
+            <div class="p-5">
+                <input type="hidden" id="attType" value="">
+                <input type="hidden" id="attLat" value="">
+                <input type="hidden" id="attLng" value="">
+                <button id="btnCapture" onclick="captureAndSubmit()" disabled class="w-full bg-primary text-surface py-3.5 rounded-xl text-sm font-bold flex justify-center items-center gap-2 hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i data-lucide="camera" class="w-5 h-5"></i> Ambil Foto & Absen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ================= BOTTOM SHEET REQUEST ================= -->
 <div id="requestBottomSheet" class="fixed inset-0 z-50 hidden">
     <div id="requestOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300"></div>
-    
     <div id="requestSheet" class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-3xl shadow-2xl transform translate-y-full transition-transform duration-300 ease-in-out pb-safe">
         <div class="p-5 pb-8 md:max-w-md md:mx-auto">
             <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5"></div>
             <h3 class="text-sm font-semibold text-gray-800 mb-5 text-center">Buat Pengajuan</h3>
-            
             <div class="grid grid-cols-3 gap-4">
                 <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
                     <div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:bg-primary group-hover:text-surface transition shadow-sm">
@@ -249,14 +295,12 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
                     <span class="text-[11px] font-medium text-gray-600">Leave</span>
                 </a>
-                
                 <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
                     <div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center group-hover:bg-pending group-hover:text-surface transition shadow-sm">
                         <i data-lucide="stethoscope" class="w-5 h-5"></i>
                     </div>
                     <span class="text-[11px] font-medium text-gray-600">Sick</span>
                 </a>
-                
                 <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
                     <div class="w-12 h-12 bg-success/10 text-success rounded-full flex items-center justify-center group-hover:bg-success group-hover:text-surface transition shadow-sm">
                         <i data-lucide="clock-4" class="w-5 h-5"></i>
@@ -274,12 +318,9 @@ require_once __DIR__ . '/components/sidebar.php';
 <!-- Panggil Komponen Toast Secara Global -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
-<!-- Script Animasi Level Index & Icon Render & Realtime Clock -->
 <script>
-    // 1. Render Icon
     lucide.createIcons();
 
-    // 2. Fungsi Jam Realtime
     function updateRealtimeClock() {
         const now = new Date();
         const hours = String(now.getHours()).padStart(2, '0');
@@ -290,9 +331,183 @@ require_once __DIR__ . '/components/sidebar.php';
         }
     }
     setInterval(updateRealtimeClock, 1000);
-    updateRealtimeClock(); // Panggil sekali langsung agar tidak nunggu 1 detik
+    updateRealtimeClock();
 
-    // 3. Logika Modal Request (Bottom Sheet)
+    // ==========================================
+    // LOGIKA ABSENSI (GPS, Geofence & KAMERA)
+    // ==========================================
+    let cameraStream = null;
+    const attModal = document.getElementById('attendanceModal');
+    const attOverlay = document.getElementById('attendanceOverlay');
+    const attCard = document.getElementById('attendanceCard');
+    
+    const video = document.getElementById('cameraStream');
+    const locStatus = document.getElementById('locationStatus');
+    const btnCapture = document.getElementById('btnCapture');
+    
+    const attType = document.getElementById('attType');
+    const attLat = document.getElementById('attLat');
+    const attLng = document.getElementById('attLng');
+    const attTitle = document.getElementById('attendanceTitle');
+    const attTime = document.getElementById('attendanceTime');
+
+    // Variabel Settings dari PHP
+    const isGeofenceEnabled = <?= $is_geofence_enabled ?>;
+    const officeLat = <?= $office_lat !== null ? $office_lat : 'null' ?>;
+    const officeLng = <?= $office_lng !== null ? $office_lng : 'null' ?>;
+    const officeRadius = <?= $office_radius ?>;
+
+    document.body.appendChild(attModal);
+
+    // Rumus Haversine untuk menghitung jarak dalam meter
+    function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
+        var R = 6371000; // Radius bumi dalam meter
+        var dLat = deg2rad(lat2-lat1);
+        var dLon = deg2rad(lon2-lon1); 
+        var a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2); 
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+        return R * c; 
+    }
+    function deg2rad(deg) { return deg * (Math.PI/180); }
+
+    function openAttendance(type) {
+        attType.value = type;
+        attTitle.innerText = type === 'in' ? 'Absen Masuk' : 'Absen Pulang';
+        
+        const now = new Date();
+        attTime.innerText = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' WIB';
+
+        locStatus.innerText = "Mencari lokasi akurat...";
+        locStatus.className = "text-xs text-white font-semibold leading-tight animate-pulse";
+        btnCapture.disabled = true;
+        attLat.value = "";
+        attLng.value = "";
+
+        attModal.classList.remove('hidden');
+        setTimeout(() => {
+            attOverlay.classList.remove('opacity-0');
+            attCard.classList.remove('scale-95', 'opacity-0');
+            attCard.classList.add('scale-100', 'opacity-100');
+        }, 10);
+
+        // Minta Akses Kamera Depan
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(function(stream) {
+                cameraStream = stream;
+                video.srcObject = stream;
+            })
+            .catch(function(err) {
+                if(typeof showToast === 'function') showToast('Akses kamera ditolak atau tidak tersedia.', 'error');
+                locStatus.innerText = "Kamera tidak aktif!";
+                locStatus.classList.remove('animate-pulse');
+                locStatus.classList.add('text-failed');
+            });
+        }
+
+        // Minta Akses GPS dan Eksekusi Geofencing
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const currentLat = position.coords.latitude;
+                    const currentLng = position.coords.longitude;
+                    
+                    attLat.value = currentLat;
+                    attLng.value = currentLng;
+                    
+                    // Logika Geofencing (Settings)
+                    if (isGeofenceEnabled === 1 && officeLat !== null && officeLng !== null) {
+                        const distance = getDistanceFromLatLonInM(currentLat, currentLng, officeLat, officeLng);
+                        const distanceRounded = Math.round(distance);
+                        
+                        if (distance > officeRadius) {
+                            locStatus.innerHTML = `Di luar radius! Jarak: ${distanceRounded}m (Maks: ${officeRadius}m)`;
+                            locStatus.classList.remove('animate-pulse');
+                            locStatus.classList.add('text-failed');
+                            btnCapture.disabled = true; // Kunci tombol jika di luar radius
+                        } else {
+                            locStatus.innerHTML = `Dalam radius kantor. Jarak: ${distanceRounded}m`;
+                            locStatus.classList.remove('animate-pulse');
+                            locStatus.classList.add('text-success');
+                            btnCapture.disabled = false; // Buka kunci tombol
+                        }
+                    } else {
+                        // Jika Mode Bebas (WFA) atau Karyawan belum diset lokasinya
+                        locStatus.innerHTML = `GPS Terkunci: Mode Absen WFA`;
+                        locStatus.classList.remove('animate-pulse');
+                        locStatus.classList.add('text-success');
+                        btnCapture.disabled = false;
+                    }
+                },
+                function(error) {
+                    locStatus.innerText = "Gagal mendapatkan lokasi GPS";
+                    locStatus.classList.remove('animate-pulse');
+                    locStatus.classList.add('text-failed');
+                    if(typeof showToast === 'function') showToast('Akses lokasi (GPS) ditolak.', 'error');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            locStatus.innerText = "GPS tidak didukung browser ini";
+            locStatus.classList.remove('animate-pulse');
+            locStatus.classList.add('text-failed');
+        }
+    }
+
+    function closeAttendance() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        attOverlay.classList.add('opacity-0');
+        attCard.classList.remove('scale-100', 'opacity-100');
+        attCard.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => { attModal.classList.add('hidden'); }, 300);
+    }
+
+    // Tambahkan event listener cadangan untuk overlay jika onclick HTML gagal
+    if (attOverlay) {
+        attOverlay.addEventListener('click', closeAttendance);
+    }
+
+    function captureAndSubmit() {
+        btnCapture.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Memproses...';
+        btnCapture.disabled = true;
+        lucide.createIcons();
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+
+        const formData = new FormData();
+        formData.append('type', attType.value); 
+        formData.append('lat', attLat.value);
+        formData.append('lng', attLng.value);
+        formData.append('image', base64Image);
+
+        // MOCKUP PROSES AJAX
+        setTimeout(() => {
+            closeAttendance();
+            if(typeof showToast === 'function') {
+                showToast(`Absen ${attType.value === 'in' ? 'Masuk' : 'Pulang'} berhasil dicatat!`, 'success');
+            }
+            btnCapture.innerHTML = '<i data-lucide="camera" class="w-5 h-5"></i> Ambil Foto & Absen';
+        }, 1500);
+    }
+
+    // ==========================================
+    // LOGIKA MODAL REQUEST BAWAAN
+    // ==========================================
     document.addEventListener('DOMContentLoaded', () => {
         const requestBtn = document.getElementById('requestBtn');
         const bottomSheet = document.getElementById('requestBottomSheet');
@@ -301,30 +516,15 @@ require_once __DIR__ . '/components/sidebar.php';
 
         function openSheet() {
             bottomSheet.classList.remove('hidden');
-            setTimeout(() => {
-                overlay.classList.remove('opacity-0');
-                sheet.classList.remove('translate-y-full');
-            }, 10);
+            setTimeout(() => { overlay.classList.remove('opacity-0'); sheet.classList.remove('translate-y-full'); }, 10);
         }
-
         function closeSheet() {
-            overlay.classList.add('opacity-0');
-            sheet.classList.add('translate-y-full');
-            setTimeout(() => {
-                bottomSheet.classList.add('hidden');
-            }, 300);
+            overlay.classList.add('opacity-0'); sheet.classList.add('translate-y-full');
+            setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300);
         }
 
-        if (requestBtn) {
-            requestBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                openSheet();
-            });
-        }
-
-        if (overlay) {
-            overlay.addEventListener('click', closeSheet);
-        }
+        if (requestBtn) requestBtn.addEventListener('click', (e) => { e.preventDefault(); openSheet(); });
+        if (overlay) overlay.addEventListener('click', closeSheet);
     });
 </script>
 

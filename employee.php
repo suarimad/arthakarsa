@@ -15,14 +15,18 @@ if (isset($_SESSION['toast_msg'])) {
 }
 
 $user_name = $_SESSION['user_name'] ?? 'User';
-$user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
+$user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
+// PENYESUAIAN: Menambahkan JOIN ke tabel roles
 $stmt = $pdo->prepare("
-    SELECT u.id, u.name, u.email, u.role, p.name as position_name, d.name as department_name 
+    SELECT u.id, u.name, u.email, 
+           r.name as role_name, r.display_name as role_display, 
+           p.name as position_name, d.name as department_name 
     FROM users u 
     LEFT JOIN positions p ON u.position_id = p.id
     LEFT JOIN departments d ON p.department_id = d.id
+    LEFT JOIN roles r ON u.role_id = r.id
     WHERE u.tenant_id = ?
     ORDER BY u.name ASC
 ");
@@ -57,7 +61,7 @@ require_once __DIR__ . '/components/sidebar.php';
             <span id="toastMsg"></span>
         </div>
 
-        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2">
+        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
                 <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Direktori Karyawan</h2>
@@ -70,7 +74,7 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <!-- Form Pencarian (AJAX) -->
-            <div class="relative">
+            <div class="relative z-0">
                 <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 <input type="text" id="searchInput" placeholder="Cari nama, email, atau jabatan..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
@@ -97,18 +101,19 @@ require_once __DIR__ . '/components/sidebar.php';
                 <div class="md:col-span-3 space-y-5 md:space-y-6">
                     
                     <?php if($currentUser): ?>
-                    <section class="bg-primary rounded-2xl p-5 text-surface shadow-md relative overflow-hidden flex items-center gap-4">
+                    <section class="bg-primary rounded-2xl p-5 text-surface shadow-md relative z-0 overflow-hidden flex items-center gap-4">
                         <div class="absolute top-0 right-0 opacity-10 pointer-events-none">
                             <i data-lucide="award" class="w-32 h-32 md:w-48 md:h-48 -mt-4 md:-mt-8 -mr-4 md:-mr-8"></i>
                         </div>
                         
-                        <div class="w-14 h-14 md:w-16 md:h-16 rounded-full bg-surface shrink-0 p-0.5 z-10 shadow-sm">
+                        <div class="w-14 h-14 md:w-16 md:h-16 rounded-full bg-surface shrink-0 p-0.5 relative z-10 shadow-sm">
                             <img src="https://ui-avatars.com/api/?name=<?= urlencode($currentUser['name']) ?>&background=fff&color=<?= str_replace('#','', $app_settings['theme_color'] ?? 'ea3800') ?>&rounded=true" alt="Profile" class="w-full h-full rounded-full object-cover">
                         </div>
                         
-                        <div class="z-10 flex-1 min-w-0">
+                        <div class="relative z-10 flex-1 min-w-0">
                             <h3 class="text-base md:text-xl font-bold tracking-tight truncate"><?= htmlspecialchars($currentUser['name']) ?> <span class="text-xs font-medium bg-surface/20 px-2 py-0.5 rounded-md ml-1 inline-block align-middle">Anda</span></h3>
-                            <p class="text-xs text-surface/80 mt-0.5 font-medium truncate"><?= htmlspecialchars($currentUser['position_name'] ?? ucfirst($currentUser['role'])) ?></p>
+                            <!-- PENYESUAIAN: Membaca role_display -->
+                            <p class="text-xs text-surface/80 mt-0.5 font-medium truncate"><?= htmlspecialchars($currentUser['position_name'] ?? $currentUser['role_display'] ?? ucfirst($currentUser['role_name'] ?? 'Employee')) ?></p>
                             
                             <div class="mt-3 flex items-center gap-3 text-[10px] md:text-xs text-surface/90 font-medium">
                                 <span class="flex items-center gap-1 truncate"><i data-lucide="mail" class="w-3.5 h-3.5"></i> <?= htmlspecialchars($currentUser['email']) ?></span>
@@ -117,21 +122,22 @@ require_once __DIR__ . '/components/sidebar.php';
                     </section>
                     <?php endif; ?>
 
-                    <section>
+                    <section class="relative z-0">
                         <div class="flex justify-between items-center mb-3 px-1">
                             <h3 class="text-xs md:text-sm font-semibold text-gray-800">Rekan Kerja</h3>
                             <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" id="employeeCount"><?= count($otherEmployees) ?> orang</span>
                         </div>
                         
                         <!-- Kontainer AJAX Render -->
-                        <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                        <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0">
                             <?php foreach($otherEmployees as $emp): ?>
-                                <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 group cursor-pointer">
+                                <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 group cursor-pointer relative z-0">
                                     <img src="https://ui-avatars.com/api/?name=<?= urlencode($emp['name']) ?>&background=<?= str_replace('#', '', $app_settings['theme_color'] ?? 'ea3800') ?>&color=fff&rounded=true" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 group-hover:scale-105 transition-transform">
                                     
                                     <div class="flex-1 min-w-0">
                                         <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= htmlspecialchars($emp['name']) ?></h4>
-                                        <p class="text-[11px] text-gray-500 font-medium truncate mt-0.5"><?= htmlspecialchars($emp['position_name'] ?? ucfirst($emp['role'])) ?></p>
+                                        <!-- PENYESUAIAN: Membaca role_display -->
+                                        <p class="text-[11px] text-gray-500 font-medium truncate mt-0.5"><?= htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee')) ?></p>
                                         <p class="text-[10px] text-gray-400 truncate mt-1.5 flex items-center gap-1">
                                             <i data-lucide="mail" class="w-3 h-3"></i> <?= htmlspecialchars($emp['email']) ?>
                                         </p>

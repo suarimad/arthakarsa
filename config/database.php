@@ -31,18 +31,16 @@ $db_port   = getenv('DB_PORT');
 $db_name   = getenv('DB_NAME');
 $db_user   = getenv('DB_USER');
 $db_pass   = getenv('DB_PASS');
-$db_schema = getenv('DB_SCHEMA');
 
 try {
-    $dsn = "pgsql:host=$db_host;port=$db_port;dbname=$db_name;";
+    // DSN diubah menjadi mysql dan ditambahkan charset utf8mb4 agar mendukung emoji & karakter khusus
+    $dsn = "mysql:host=$db_host;port=$db_port;dbname=$db_name;charset=utf8mb4";
     $pdo = new PDO($dsn, $db_user, $db_pass, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
     
-    $pdo->exec("SET search_path TO $db_schema");
-
 } catch (PDOException $e) {
     die("Koneksi Database Gagal: " . $e->getMessage());
 }

@@ -13,18 +13,21 @@ $tenant_id = $_SESSION['tenant_id'];
 $user_id = $_SESSION['user_id'];
 $q = $_GET['q'] ?? '';
 
-// Query Pencarian
+// PENYESUAIAN: Menambahkan JOIN ke tabel roles
 $sql = "
-    SELECT u.id, u.name, u.email, u.role, p.name as position_name 
+    SELECT u.id, u.name, u.email, 
+           r.name as role_name, r.display_name as role_display, 
+           p.name as position_name 
     FROM users u 
     LEFT JOIN positions p ON u.position_id = p.id
+    LEFT JOIN roles r ON u.role_id = r.id
     WHERE u.tenant_id = ? AND u.id != ?
 ";
 $params = [$tenant_id, $user_id];
 
 if (!empty($q)) {
-    // ILIKE untuk PostgreSQL (Case Insensitive Search)
-    $sql .= " AND (u.name ILIKE ? OR u.email ILIKE ? OR p.name ILIKE ?)";
+    // LIKE agar support MySQL
+    $sql .= " AND (u.name LIKE ? OR u.email LIKE ? OR p.name LIKE ?)";
     $params[] = "%$q%";
     $params[] = "%$q%";
     $params[] = "%$q%";
@@ -53,11 +56,14 @@ if(empty($employees)) {
 foreach($employees as $emp) {
     $name = htmlspecialchars($emp['name']);
     $email = htmlspecialchars($emp['email']);
-    $position = htmlspecialchars($emp['position_name'] ?? ucfirst($emp['role']));
+    
+    // PENYESUAIAN: Membaca role_display
+    $position = htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee'));
+    
     $avatar = "https://ui-avatars.com/api/?name=".urlencode($name)."&background={$theme_color}&color=fff&rounded=true";
     
     echo '
-    <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 group cursor-pointer">
+    <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 group cursor-pointer relative z-0">
         <img src="'.$avatar.'" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 group-hover:scale-105 transition-transform">
         
         <div class="flex-1 min-w-0">

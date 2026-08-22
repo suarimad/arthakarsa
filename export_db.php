@@ -1,188 +1,99 @@
 <?php
-// Panggil Konfigurasi Global & Database
+// Load konfigurasi database (Pastikan masih terhubung ke PostgreSQL)
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 
-// Panggil Komponen Auth
-require_once __DIR__ . '/components/auth.php';
-
-
-$user_name = $_SESSION['user_name'] ?? 'Superadmin';
-$user_role = 'Developer';
-$tenant_name = 'Sistem Pusat'; 
-
-// ==========================================
-// PROSES GENERATE SQL (PURE PHP UNTUK POSTGRESQL)
-// ==========================================
-$sql_dump = "-- ==================================================\n";
-$sql_dump .= "-- Backup Database HRIS (PostgreSQL)\n";
-$sql_dump .= "-- Tanggal: " . date('Y-m-d H:i:s') . "\n";
-$sql_dump .= "-- ==================================================\n\n";
+// Ambil schema dari .env, default ke 'public' jika kosong
+$schema = getenv('DB_SCHEMA') ?: 'public';
+$db_structure = "";
 
 try {
-    // 1. Ambil semua nama tabel di schema public
-    $stmt = $pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'");
-    $tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    // 1. Ambil semua nama tabel
+    $stmtTables = $pdo->prepare("
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = :schema AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+    ");
+    $stmtTables->execute(['schema' => $schema]);
+    $tables = $stmtTables->fetchAll(PDO::FETCH_ASSOC);
 
-    foreach ($tables as $table) {
-        $sql_dump .= "-- ------------------------------------------------\n";
-        $sql_dump .= "-- Struktur Tabel: $table\n";
-        $sql_dump .= "-- ------------------------------------------------\n";
-        $sql_dump .= "DROP TABLE IF EXISTS $table CASCADE;\n";
-        $sql_dump .= "CREATE TABLE $table (\n";
+    foreach ($tables as $t) {
+        $tableName = $t['table_name'];
+        $db_structure .= "Tabel: {$tableName}\n";
+        $db_structure .= str_repeat("=", 80) . "\n";
+        $db_structure .= sprintf("%-20s | %-25s | %-8s | %s\n", "NAMA KOLOM", "TIPE DATA", "NULLABLE", "DEFAULT");
+        $db_structure .= str_repeat("-", 80) . "\n";
 
-        // 2. Ambil struktur kolom untuk tabel ini
-        $colStmt = $pdo->prepare("SELECT column_name, data_type, character_maximum_length, column_default, is_nullable FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position");
-        $colStmt->execute([$table]);
-        $columns = $colStmt->fetchAll(PDO::FETCH_ASSOC);
+        // 2. Ambil detail kolom untuk setiap tabel
+        $stmtCols = $pdo->prepare("
+            SELECT column_name, data_type, character_maximum_length, column_default, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = :schema AND table_name = :table_name
+            ORDER BY ordinal_position
+        ");
+        $stmtCols->execute(['schema' => $schema, 'table_name' => $tableName]);
+        $columns = $stmtCols->fetchAll(PDO::FETCH_ASSOC);
 
-        $colDefs = [];
-        foreach ($columns as $col) {
-            $def = "    " . $col['column_name'] . " " . $col['data_type'];
-            // Tambahkan panjang karakter jika ada (misal VARCHAR(255))
-            if ($col['character_maximum_length']) {
-                $def .= "(" . $col['character_maximum_length'] . ")";
-            }
-            // Nullable
-            if ($col['is_nullable'] === 'NO') {
-                $def .= " NOT NULL";
-            }
-            // Default value
-            if ($col['column_default'] !== null) {
-                $def .= " DEFAULT " . $col['column_default'];
-            }
-            $colDefs[] = $def;
-        }
-        $sql_dump .= implode(",\n", $colDefs);
-        $sql_dump .= "\n);\n\n";
-
-        // 3. Ambil dan Generate Data (INSERT INTO)
-        $dataStmt = $pdo->query("SELECT * FROM $table");
-        $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (count($rows) > 0) {
-            $sql_dump .= "-- Data untuk Tabel: $table\n";
-            foreach ($rows as $row) {
-                $keys = array_keys($row);
-                $values = array_values($row);
-
-                // Escape values
-                $escapedValues = array_map(function($val) {
-                    if ($val === null) return 'NULL';
-                    $val = str_replace("'", "''", $val); // Escape single quotes in pgsql
-                    return "'$val'";
-                }, $values);
-
-                $sql_dump .= "INSERT INTO $table (" . implode(", ", $keys) . ") VALUES (" . implode(", ", $escapedValues) . ");\n";
-            }
-        }
-        $sql_dump .= "\n\n";
-    }
-    $sql_dump .= "-- ==================================================\n";
-    $sql_dump .= "-- Backup Selesai\n";
-    $sql_dump .= "-- ==================================================\n";
-
-} catch (Exception $e) {
-    $sql_dump = "Terjadi Kesalahan saat mengekspor database: \n" . $e->getMessage();
-}
-
-// Fitur Download SQL Otomatis via Action
-if (isset($_GET['download']) && $_GET['download'] === 'true') {
-    header('Content-Type: text/plain; charset=utf-8');
-    header('Content-Disposition: attachment; filename="backup_db_' . date('Y_m_d_His') . '.sql"');
-    echo $sql_dump;
-    exit;
-}
-
-// 1. Load Head
-require_once __DIR__ . '/components/head.php';
-// 2. Load Sidebar
-require_once __DIR__ . '/components/sidebar.php';
-?>
-
-<!-- MAIN CONTENT AREA -->
-<div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
-    <!-- Tambahan flex flex-col agar area membentang sempurna ke bawah -->
-    <main class="w-full min-h-screen pb-24 md:pb-8 md:px-6 flex flex-col">
-        
-        <?php require_once __DIR__ . '/components/header.php'; ?>
-
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
-        </div>
-
-        <!-- max-w-4xl diubah menjadi w-full, dan ditambahkan class flex-1 flex flex-col -->
-        <div class="px-5 md:px-0 mt-2 w-full mx-auto space-y-5 flex-1 flex flex-col pb-4">
+        foreach ($columns as $c) {
+            $colName = $c['column_name'];
             
-            <div class="flex justify-between items-center px-1 shrink-0">
-                <div>
-                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight leading-tight">Ekspor Database SQL</h2>
-                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Alat khusus developer untuk backup struktur & data.</p>
-                </div>
-                
-                <div class="flex gap-2">
-                    <button onclick="copySql()" class="bg-surface text-gray-600 border border-gray-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-50 transition shadow-sm">
-                        <i data-lucide="copy" class="w-4 h-4"></i> Salin
-                    </button>
-                    <a href="export_db?download=true" class="bg-primary text-surface px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition shadow-sm">
-                        <i data-lucide="download" class="w-4 h-4"></i> Unduh (.sql)
-                    </a>
-                </div>
-            </div>
+            // Format tipe data (misal: character varying(255))
+            $type = $c['data_type'];
+            if ($c['character_maximum_length']) {
+                $type .= "(" . $c['character_maximum_length'] . ")";
+            }
+            
+            $nullable = $c['is_nullable'] === 'YES' ? 'NULL' : 'NOT NULL';
+            $default = $c['column_default'] ? $c['column_default'] : "Tidak Ada";
 
-            <!-- Textarea Output SQL (h-[65vh] diubah menjadi flex-1 min-h-[65vh] agar benar-benar Full Screen) -->
-            <div class="bg-surface md:border border-gray-100 md:rounded-3xl shadow-sm p-4 flex-1 flex flex-col min-h-[65vh]">
-                <textarea id="sqlOutput" class="w-full h-full bg-[#1e1e1e] text-[#d4d4d4] font-mono text-[11px] md:text-xs p-4 rounded-xl focus:outline-none resize-none border border-gray-200 leading-relaxed overflow-y-auto" readonly><?= htmlspecialchars($sql_dump) ?></textarea>
-            </div>
-
-        </div>
-    </main>
-</div>
-
-<?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
-
-<script>
-    lucide.createIcons();
-
-    function showToast(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
-
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
+            $db_structure .= sprintf("%-20s | %-25s | %-8s | %s\n", $colName, $type, $nullable, $default);
         }
-        lucide.createIcons();
-
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
+        $db_structure .= "\n\n";
     }
+} catch (PDOException $e) {
+    die("Gagal membaca struktur database: " . $e->getMessage());
+}
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Struktur DB (PostgreSQL)</title>
+    <style>
+        body { font-family: monospace; background-color: #1e1e1e; color: #d4d4d4; padding: 20px; margin: 0; }
+        .container { max-width: 900px; margin: auto; }
+        h2 { color: #569cd6; }
+        p { color: #9cdcfe; font-size: 14px; }
+        textarea { width: 100%; height: 70vh; background-color: #252526; color: #d4d4d4; border: 1px solid #333; padding: 15px; font-family: monospace; font-size: 13px; outline: none; border-radius: 8px; resize: vertical; }
+        button { padding: 12px 24px; background-color: #ea3800; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 15px; transition: 0.2s; }
+        button:hover { background-color: #c93000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Export Struktur PostgreSQL (Schema: <?= htmlspecialchars($schema) ?>)</h2>
+        <p>Silakan klik tombol "Copy Semua", lalu paste (*tempel*) isinya ke chat agar saya bisa mengubahnya menjadi SQL MySQL murni.</p>
+        
+        <button id="copyBtn">📋 Copy Semua Teks</button>
+        
+        <textarea id="dbText" readonly><?= htmlspecialchars($db_structure) ?></textarea>
+    </div>
 
-    // Fungsi Salin SQL ke Clipboard
-    function copySql() {
-        const copyText = document.getElementById("sqlOutput");
-        copyText.select();
-        copyText.setSelectionRange(0, 999999); // Untuk perangkat mobile
-
-        navigator.clipboard.writeText(copyText.value).then(() => {
-            showToast('Script SQL berhasil disalin ke clipboard!', 'success');
-        }).catch(err => {
-            showToast('Gagal menyalin teks.', 'failed');
+    <script>
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            var textarea = document.getElementById('dbText');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); /* Untuk mobile */
+            document.execCommand('copy');
+            this.innerText = '✅ Teks Berhasil Dicopy!';
+            this.style.backgroundColor = '#28a745';
+            setTimeout(() => {
+                this.innerText = '📋 Copy Semua Teks';
+                this.style.backgroundColor = '#ea3800';
+            }, 3000);
         });
-    }
-</script>
-
-<?php require_once __DIR__ . '/components/pwa_init.php'; ?>
+    </script>
 </body>
 </html>

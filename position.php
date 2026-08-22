@@ -1,0 +1,539 @@
+<?php
+require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/components/auth.php';
+
+// Guard: Hanya admin & superadmin
+if (!in_array($_SESSION['role'], ['admin', 'superadmin'])) {
+    $_SESSION['toast_msg'] = "Anda tidak memiliki akses ke halaman ini.";
+    $_SESSION['toast_type'] = "failed";
+    header("Location: index");
+    exit;
+}
+
+$user_id = $_SESSION['user_id'];
+$tenant_id = $_SESSION['tenant_id'];
+
+// ==============================================================================
+// PENANGANAN AJAX (ADD, EDIT, DELETE, VIEW)
+// ==============================================================================
+if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
+    header('Content-Type: application/json');
+    
+    try {
+        // --- 1. VIEW DATA (GET) ---
+        if ($_SERVER['REQUEST_METHOD'] === 'GET' && $_GET['ajax_action'] === 'view') {
+            $id = $_GET['position_id'];
+            
+            // Hitung total karyawan di posisi ini
+            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users FROM users WHERE position_id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $tenant_id]);
+            $res = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'status' => 'success',
+                'data' => [
+                    'users' => $res['total_users'] ?? 0
+                ]
+            ]);
+            exit;
+        }
+
+        // --- 2. ADD DATA (POST) ---
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['ajax_action'] === 'add') {
+            $name = trim($_POST['name']);
+            $department_id = $_POST['department_id'] !== '' ? $_POST['department_id'] : null;
+            
+            $stmt = $pdo->prepare("INSERT INTO positions (tenant_id, department_id, name) VALUES (?, ?, ?)");
+            $stmt->execute([$tenant_id, $department_id, $name]);
+            
+            $_SESSION['toast_msg'] = "Posisi/Jabatan berhasil ditambahkan!";
+            $_SESSION['toast_type'] = "success";
+            echo json_encode(['status' => 'success']);
+            exit;
+        }
+
+        // --- 3. EDIT DATA (POST) ---
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['ajax_action'] === 'edit') {
+            $id = $_POST['position_id'];
+            $name = trim($_POST['name']);
+            $department_id = $_POST['department_id'] !== '' ? $_POST['department_id'] : null;
+            
+            $stmt = $pdo->prepare("UPDATE positions SET name = ?, department_id = ? WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$name, $department_id, $id, $tenant_id]);
+            
+            $_SESSION['toast_msg'] = "Posisi/Jabatan berhasil diperbarui!";
+            $_SESSION['toast_type'] = "success";
+            echo json_encode(['status' => 'success']);
+            exit;
+        }
+
+        // --- 4. DELETE DATA (POST) ---
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['ajax_action'] === 'delete') {
+            $id = $_POST['position_id'];
+            
+            // Karena tabel positions tidak punya deleted_at, kita hapus permanen (Hard Delete)
+            // FK ON DELETE SET NULL di tabel users akan otomatis membuat user kehilangan posisi ini dengan aman
+            $stmt = $pdo->prepare("DELETE FROM positions WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $tenant_id]);
+            
+            $_SESSION['toast_msg'] = "Posisi/Jabatan berhasil dihapus!";
+            $_SESSION['toast_type'] = "success";
+            echo json_encode(['status' => 'success']);
+            exit;
+        }
+        
+    } catch (Exception $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        exit;
+    }
+}
+// ==============================================================================
+
+// Menangkap Pesan Toast Global
+$toast_msg = '';
+$toast_type = '';
+if (isset($_SESSION['toast_msg'])) {
+    $toast_msg = $_SESSION['toast_msg'];
+    $toast_type = $_SESSION['toast_type'] ?? 'info';
+    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
+}
+
+$user_name = $_SESSION['user_name'] ?? 'User';
+$user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
+$tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
+
+// AMBIL DAFTAR DEPARTEMEN UNTUK KEBUTUHAN DROPDOWN (FORM ADD/EDIT)
+$stmtDeps = $pdo->prepare("SELECT id, name FROM departments WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY name ASC");
+$stmtDeps->execute([$tenant_id]);
+$all_departments = $stmtDeps->fetchAll(PDO::FETCH_ASSOC);
+
+// Render opsi departemen ke dalam format HTML untuk diinject ke JavaScript
+$deptOptionsHtml = '<option value="">-- Pilih Departemen (Opsional) --</option>';
+foreach($all_departments as $d) {
+    $deptOptionsHtml .= '<option value="'.$d['id'].'">'.htmlspecialchars($d['name'], ENT_QUOTES).'</option>';
+}
+
+// MENGAMBIL DATA POSISI UNTUK RENDER HALAMAN UTAMA (Beserta nama departemennya)
+$stmt = $pdo->prepare("
+    SELECT p.*, d.name as department_name 
+    FROM positions p 
+    LEFT JOIN departments d ON p.department_id = d.id 
+    WHERE p.tenant_id = ? 
+    ORDER BY p.name ASC
+");
+$stmt->execute([$tenant_id]);
+$positions = $stmt->fetchAll();
+
+require_once __DIR__ . '/components/head.php';
+require_once __DIR__ . '/components/sidebar.php';
+?>
+
+<div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden">
+    <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6">
+        
+        <?php require_once __DIR__ . '/components/header.php'; ?>
+
+        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
+            <i id="toastIcon" class="w-4 h-4"></i>
+            <span id="toastMsg"></span>
+        </div>
+
+        <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
+            
+            <div class="flex justify-between items-center px-1">
+                <div>
+                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Manajemen Posisi</h2>
+                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola jabatan spesifik untuk karyawan</p>
+                </div>
+                
+                <!-- TOMBOL TAMBAH AJAX -->
+                <button onclick="openCrud('add')" class="bg-primary/10 text-primary px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Tambah
+                </button>
+            </div>
+
+            <!-- Form Pencarian (Local JS) -->
+            <div class="relative z-0">
+                <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="searchInput" placeholder="Cari nama jabatan..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
+            </div>
+
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-3 space-y-5 md:space-y-6">
+                    
+                    <section class="relative z-0">
+                        <div class="flex justify-between items-center mb-3 px-1">
+                            <h3 class="text-xs md:text-sm font-semibold text-gray-800">Daftar Posisi</h3>
+                            <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" id="positionCount"><?= count($positions) ?> Posisi</span>
+                        </div>
+                        
+                        <!-- Kontainer List Posisi -->
+                        <div id="positionListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0">
+                            <?php foreach($positions as $pos): 
+                                $safe_name = htmlspecialchars($pos['name'], ENT_QUOTES);
+                                $dept_name = htmlspecialchars($pos['department_name'] ?? 'Tanpa Departemen');
+                                $dept_id = $pos['department_id'] ?? '';
+                            ?>
+                                <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col gap-3 transition hover:border-gray-200 group position-card relative z-0" data-name="<?= strtolower($safe_name) ?>">
+                                    
+                                    <!-- Header Card -->
+                                    <div class="flex items-center gap-3.5">
+                                        <div class="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                            <i data-lucide="briefcase" class="w-6 h-6"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= $safe_name ?></h4>
+                                            <div class="flex items-center gap-1.5 mt-0.5">
+                                                <i data-lucide="building-2" class="w-3 h-3 text-gray-400"></i>
+                                                <p class="text-[11px] text-gray-500 font-medium truncate"><?= $dept_name ?></p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Aksi CRUD AJAX -->
+                                    <div class="flex gap-1.5 mt-2">
+                                        <button onclick="openCrud('view', <?= $pos['id'] ?>, '<?= $safe_name ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-success/10 hover:text-success transition">
+                                            <i data-lucide="eye" class="w-3.5 h-3.5"></i> Lihat
+                                        </button>
+                                        <button onclick="openCrud('edit', <?= $pos['id'] ?>, '<?= $safe_name ?>', '<?= $dept_id ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-primary/10 hover:text-primary transition">
+                                            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit
+                                        </button>
+                                        <button onclick="openCrud('delete', <?= $pos['id'] ?>, '<?= $safe_name ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-failed/10 hover:text-failed transition">
+                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus
+                                        </button>
+                                    </div>
+
+                                </div>
+                            <?php endforeach; ?>
+                            
+                            <?php if(empty($positions)): ?>
+                                <div class="col-span-full bg-surface border border-dashed border-gray-200 rounded-2xl p-8 text-center">
+                                    <div class="w-12 h-12 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <i data-lucide="briefcase" class="w-6 h-6"></i>
+                                    </div>
+                                    <h4 class="text-sm font-bold text-gray-800">Belum ada posisi</h4>
+                                    <p class="text-xs text-gray-500 mt-1 max-w-xs mx-auto">Klik tombol tambah di atas untuk membuat jabatan karyawan Anda.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ================= HYBRID MODAL/BOTTOM SHEET (CRUD) ================= -->
+<div id="crudModal" class="fixed inset-0 hidden" style="z-index: 99999;">
+    <!-- Overlay -->
+    <div id="crudOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    
+    <!-- Modal Container: flex items-end (mobile) md:items-center (desktop) -->
+    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
+        <!-- Content Card -->
+        <div id="crudCard" class="bg-surface w-full max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh]">
+            
+            <!-- Handle Drag line for mobile -->
+            <div class="pt-5 pb-2 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeCrud()">
+                <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <!-- Close button desktop -->
+            <button onclick="closeCrud()" class="hidden md:flex absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-50 hover:bg-gray-200 transition p-1.5 rounded-full z-10">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            
+            <!-- Dynamic Content Injected Here -->
+            <div id="crudContent" class="px-6 pb-8 md:p-8 overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= BOTTOM SHEET REQUEST (NAV) ================= -->
+<div id="requestBottomSheet" class="fixed inset-0 hidden" style="z-index: 99998;">
+    <div id="requestOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300"></div>
+    <div id="requestSheet" class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-3xl shadow-2xl transform translate-y-full transition-transform duration-300 ease-in-out pb-safe">
+        <div class="p-5 pb-8 md:max-w-md md:mx-auto">
+            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5"></div>
+            <h3 class="text-sm font-semibold text-gray-800 mb-5 text-center">Buat Pengajuan</h3>
+            <div class="grid grid-cols-3 gap-4">
+                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:bg-primary group-hover:text-surface transition shadow-sm">
+                        <i data-lucide="calendar-off" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] font-medium text-gray-600">Leave</span>
+                </a>
+                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center group-hover:bg-pending group-hover:text-surface transition shadow-sm">
+                        <i data-lucide="stethoscope" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] font-medium text-gray-600">Sick</span>
+                </a>
+                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-success/10 text-success rounded-full flex items-center justify-center group-hover:bg-success group-hover:text-surface transition shadow-sm">
+                        <i data-lucide="clock-4" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] font-medium text-gray-600">Overtime</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
+
+<script>
+    lucide.createIcons();
+
+    // ==========================================
+    // TOAST NOTIFICATION SYSTEM
+    // ==========================================
+    function showToast(msg, type) {
+        const toast = document.getElementById('toast');
+        const msgEl = document.getElementById('toastMsg');
+        const iconEl = document.getElementById('toastIcon');
+
+        msgEl.textContent = msg;
+        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
+
+        if (type === 'failed' || type === 'error') {
+            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
+            iconEl.setAttribute('data-lucide', 'alert-circle');
+        } else if (type === 'warning') {
+            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
+            iconEl.setAttribute('data-lucide', 'alert-triangle');
+        } else {
+            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
+            iconEl.setAttribute('data-lucide', 'check-circle');
+        }
+        lucide.createIcons();
+
+        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
+        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
+    }
+
+    const phpMsg = <?= json_encode($toast_msg) ?>;
+    const phpType = <?= json_encode($toast_type) ?>;
+    if (phpMsg) showToast(phpMsg, phpType);
+
+    // ==========================================
+    // LOKAL SEARCH JS (Tanpa Loading/AJAX)
+    // ==========================================
+    const searchInput = document.getElementById('searchInput');
+    const positionCards = document.querySelectorAll('.position-card');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            positionCards.forEach(card => {
+                const name = card.getAttribute('data-name');
+                if (name.includes(q)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // ==========================================
+    // HYBRID MODAL CRUD AJAX (DESKTOP & MOBILE)
+    // ==========================================
+    const crudModal = document.getElementById('crudModal');
+    const crudOverlay = document.getElementById('crudOverlay');
+    const crudCard = document.getElementById('crudCard');
+    const crudContent = document.getElementById('crudContent');
+    
+    // Pindahkan modal ke body agar z-index bekerja absolut di luar sidebar
+    document.body.appendChild(crudModal);
+
+    // Mengambil opsi string departemen yang dirender oleh PHP
+    const rawDeptOptionsHtml = `<?= $deptOptionsHtml ?>`;
+
+    function openCrud(action, id = '', name = '', dept_id = '') {
+        // 1. Generate HTML berdasarkan aksi
+        let html = '';
+        if (action === 'add' || action === 'edit') {
+            const title = action === 'add' ? 'Tambah Posisi' : 'Edit Posisi';
+            
+            // Menyiapkan opsi dropdown departemen yang ter-select otomatis saat Edit
+            let activeDeptOptions = rawDeptOptionsHtml;
+            if (action === 'edit' && dept_id !== '') {
+                activeDeptOptions = activeDeptOptions.replace(`value="${dept_id}"`, `value="${dept_id}" selected`);
+            }
+
+            html = `
+                <h3 class="text-base font-bold text-gray-800 mb-6 text-center">${title}</h3>
+                <form id="ajaxCrudForm">
+                    <input type="hidden" name="ajax_action" value="${action}">
+                    ${action === 'edit' ? `<input type="hidden" name="position_id" value="${id}">` : ''}
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nama Posisi</label>
+                            <input type="text" name="name" value="${name}" required placeholder="Misal: HR Staff" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Berada di Departemen</label>
+                            <div class="relative">
+                                <select name="department_id" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition appearance-none">
+                                    ${activeDeptOptions}
+                                </select>
+                                <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" id="btnSubmitCrud" class="w-full bg-primary text-surface py-3 rounded-xl text-sm font-semibold mt-8 flex justify-center items-center gap-2 hover:opacity-90 transition">
+                        <i data-lucide="save" class="w-4 h-4"></i> Simpan Data
+                    </button>
+                </form>
+            `;
+        } 
+        else if (action === 'delete') {
+            html = `
+                <div class="text-center">
+                    <div class="w-14 h-14 bg-failed/10 text-failed rounded-full flex items-center justify-center mx-auto mb-4 mt-2 md:mt-0">
+                        <i data-lucide="trash-2" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-gray-800 mb-2">Hapus Posisi?</h3>
+                    <p class="text-xs text-gray-500 mb-6">Apakah Anda yakin ingin menghapus posisi <b>${name}</b> secara permanen? Data karyawan yang memakai posisi ini akan menjadi tanpa jabatan.</p>
+                    <form id="ajaxCrudForm">
+                        <input type="hidden" name="ajax_action" value="delete">
+                        <input type="hidden" name="position_id" value="${id}">
+                        <div class="flex gap-3">
+                            <button type="button" onclick="closeCrud()" class="flex-1 py-3 bg-gray-50 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition">Batal</button>
+                            <button type="submit" id="btnSubmitCrud" class="flex-1 bg-failed text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition">Ya, Hapus</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+        else if (action === 'view') {
+            html = `
+                <div class="text-center mb-6 mt-2 md:mt-0">
+                    <div class="w-14 h-14 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i data-lucide="briefcase" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-gray-800">Statistik Posisi</h3>
+                    <p class="text-xs text-primary font-medium mt-0.5">${name}</p>
+                </div>
+                
+                <div id="viewLoader" class="flex justify-center py-6">
+                    <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-primary"></i>
+                </div>
+                
+                <div id="viewStats" class="hidden space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="users" class="w-4 h-4 text-gray-400"></i>
+                            <span class="text-xs font-semibold text-gray-700">Total Karyawan di Posisi ini</span>
+                        </div>
+                        <span id="st-users" class="text-sm font-bold text-primary">0</span>
+                    </div>
+                </div>
+                <button onclick="closeCrud()" class="w-full mt-6 py-3 bg-gray-50 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition">Tutup</button>
+            `;
+            
+            // Fetch View Data
+            fetch(`?ajax_action=view&position_id=${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('viewLoader').classList.add('hidden');
+                    document.getElementById('viewStats').classList.remove('hidden');
+                    document.getElementById('st-users').innerText = data.data.users;
+                });
+        }
+
+        crudContent.innerHTML = html;
+        lucide.createIcons();
+
+        // 2. Animasi Buka Modal/Bottom Sheet
+        crudModal.classList.remove('hidden');
+        setTimeout(() => {
+            crudOverlay.classList.remove('opacity-0');
+            
+            // Animasi Mobile
+            crudCard.classList.remove('translate-y-full');
+            crudCard.classList.add('translate-y-0');
+            
+            // Animasi Desktop
+            crudCard.classList.remove('md:scale-95', 'md:opacity-0');
+            crudCard.classList.add('md:scale-100', 'md:opacity-100');
+        }, 10);
+        
+        // 3. Attach Form Submit Event (Delegation)
+        const form = document.getElementById('ajaxCrudForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnSubmitCrud');
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Memproses...';
+                btn.disabled = true;
+                lucide.createIcons();
+
+                const formData = new FormData(this);
+                fetch('', { method: 'POST', body: formData })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            window.location.reload();
+                        } else {
+                            showToast(data.message || 'Terjadi kesalahan sistem', 'error');
+                            btn.innerHTML = 'Coba Lagi';
+                            btn.disabled = false;
+                        }
+                    })
+                    .catch(() => {
+                        showToast('Gagal terhubung ke server', 'error');
+                        btn.innerHTML = 'Coba Lagi';
+                        btn.disabled = false;
+                    });
+            });
+        }
+    }
+
+    function closeCrud() {
+        crudOverlay.classList.add('opacity-0');
+        
+        // Tutup Animasi Mobile
+        crudCard.classList.remove('translate-y-0');
+        crudCard.classList.add('translate-y-full'); 
+        
+        // Tutup Animasi Desktop
+        crudCard.classList.remove('md:scale-100', 'md:opacity-100'); 
+        crudCard.classList.add('md:scale-95', 'md:opacity-0'); 
+        
+        setTimeout(() => { crudModal.classList.add('hidden'); }, 300);
+    }
+    
+    if (crudOverlay) crudOverlay.addEventListener('click', closeCrud);
+
+    // ==========================================
+    // BOTTOM NAV REQUEST MODAL
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+        const requestBtn = document.getElementById('requestBtn');
+        const bottomSheet = document.getElementById('requestBottomSheet');
+        const overlay = document.getElementById('requestOverlay');
+        const sheet = document.getElementById('requestSheet');
+
+        document.body.appendChild(bottomSheet);
+
+        function openSheet() {
+            bottomSheet.classList.remove('hidden');
+            setTimeout(() => { overlay.classList.remove('opacity-0'); sheet.classList.remove('translate-y-full'); }, 10);
+        }
+        function closeSheet() {
+            overlay.classList.add('opacity-0'); sheet.classList.add('translate-y-full');
+            setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300);
+        }
+
+        if (requestBtn) requestBtn.addEventListener('click', (e) => { e.preventDefault(); openSheet(); });
+        if (overlay) overlay.addEventListener('click', closeSheet);
+    });
+</script>
+
+<?php require_once __DIR__ . '/components/pwa_init.php'; ?>
+</body>
+</html>
