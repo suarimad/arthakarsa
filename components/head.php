@@ -39,4 +39,4 @@
         }
     </style>
 </head>
-<body class="text-secondary bg-background flex h-screen overflow-hidden">
+<body class="text-secondary bg-white flex h-screen overflow-hidden">

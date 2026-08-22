@@ -19,7 +19,7 @@ if (isset($_SESSION['toast_msg']) && $_SESSION['toast_msg'] !== '') {
 
 <!-- 2. HTML KOMPONEN TOAST -->
 <!-- pointer-events-none: agar toast tidak menghalangi klik jika menutupi elemen lain -->
-<div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium w-[92vw] md:w-auto md:max-w-md pointer-events-none">
+<div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium w-[92vw] md:w-auto md:max-w-md pointer-events-none">
     <i id="toastIcon" class="w-4 h-4 shrink-0"></i>
     <span id="toastMsg" class="flex-1 truncate"></span>
 </div>
