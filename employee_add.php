@@ -151,7 +151,8 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- MAIN CONTENT AREA -->
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
-    <main class="w-full min-h-screen pb-6 md:pb-8 md:px-6">
+    <!-- pb-24 agar scroll bebas dari toolbar mobile -->
+    <main class="w-full min-h-screen pb-24 md:pb-8 md:px-6">
         
         <div class="hidden md:block">
             <?php require_once __DIR__ . '/components/header.php'; ?>
@@ -265,7 +266,8 @@ require_once __DIR__ . '/components/sidebar.php';
                         </div>
                     </div>
 
-                    <div class="mt-8 pt-6 border-t border-gray-100 flex gap-3">
+                    <!-- PENYESUAIAN: Menambah mb-12 agar tidak tertutup browser toolbar di mobile -->
+                    <div class="mt-8 pt-6 mb-12 md:mb-2 border-t border-gray-100 flex gap-3">
                         <a href="employee" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
                             Batal
                         </a>
@@ -315,29 +317,26 @@ require_once __DIR__ . '/components/sidebar.php';
     // LOGIKA SELECT2 & CASCADING DROPDOWN
     // ==========================================
     $(document).ready(function() {
-        // Inisialisasi Select2 pada semua elemen yang memiliki class select2
         $('.select2').select2({
             width: '100%'
         });
 
         // Cascading Department -> Position
         const posSelect = $('#position_id');
-        const originalPosOptions = posSelect.find('option').clone(); // Simpan clone semua opsi dari DB
+        const originalPosOptions = posSelect.find('option').clone(); 
         
         function filterPositions() {
             const deptId = $('#department_id').val();
             const currentVal = posSelect.val(); 
             
-            posSelect.empty(); // Kosongkan elemen select
+            posSelect.empty(); 
             
             originalPosOptions.each(function() {
-                // Tampilkan jika opsi kosong, departemen tidak dipilih, atau departemennya cocok
                 if ($(this).val() === "" || !deptId || $(this).attr('data-dept') === String(deptId)) {
                     posSelect.append($(this).clone());
                 }
             });
             
-            // Pertahankan value sebelumnya jika masih ada di daftar opsi yang difilter
             if (posSelect.find(`option[value="${currentVal}"]`).length > 0) {
                 posSelect.val(currentVal);
             } else {
@@ -345,13 +344,11 @@ require_once __DIR__ . '/components/sidebar.php';
             }
         }
 
-        // Panggil filter setiap kali departemen diubah
         $('#department_id').on('change', function() {
             filterPositions();
-            posSelect.trigger('change.select2'); // Beritahu select2 untuk me-render ulang
+            posSelect.trigger('change.select2'); 
         });
 
-        // Panggil sekali saat halaman dimuat
         filterPositions();
         posSelect.trigger('change.select2');
     });
