@@ -50,7 +50,7 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// PENYESUAIAN: Menambahkan u.uuid di SELECT query
+// 1. QUERY UTAMA: SEMUA KARYAWAN
 $stmt = $pdo->prepare("
     SELECT u.id, u.uuid, u.name, u.email, u.whatsapp, u.avatar, 
            r.name as role_name, r.display_name as role_display, 
@@ -76,8 +76,24 @@ foreach ($all_employees as $emp) {
     }
 }
 
-// MOCKUP: Ambil max 5 karyawan untuk dijadikan data "Teman yang tidak masuk"
-$absentEmployees = array_slice($otherEmployees, 0, 5); 
+// 2. QUERY DINAMIS: KARYAWAN YANG TIDAK MASUK HARI INI
+// Mengambil karyawan yang TIDAK ADA datanya di tabel attendances untuk tanggal hari ini
+$today_date = date('Y-m-d');
+$stmtAbsent = $pdo->prepare("
+    SELECT u.id, u.name, u.avatar 
+    FROM users u 
+    WHERE u.tenant_id = ? 
+      AND u.deleted_at IS NULL 
+      AND u.id != ? 
+      AND NOT EXISTS (
+          SELECT 1 FROM attendances a 
+          WHERE a.user_id = u.id AND a.date = ?
+      )
+    ORDER BY u.name ASC
+    LIMIT 10
+");
+$stmtAbsent->execute([$tenant_id, $user_id, $today_date]);
+$absentEmployees = $stmtAbsent->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/components/head.php';
 // Memasukkan FontAwesome untuk icon WhatsApp
@@ -115,7 +131,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 <input type="text" id="searchInput" placeholder="Cari nama, email, atau jabatan..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
 
-            <!-- STORY IG STYLE: Teman yang Tidak Masuk -->
+            <!-- STORY IG STYLE: Teman yang Tidak Masuk (Dinamis dari DB) -->
             <?php if(!empty($absentEmployees)): ?>
             <section class="mb-2 relative z-0">
                 <h3 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-3 px-1 uppercase tracking-wider">Tidak Masuk Hari Ini</h3>
@@ -166,14 +182,14 @@ require_once __DIR__ . '/components/sidebar.php';
                             <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" id="employeeCount"><?= count($otherEmployees) ?> orang</span>
                         </div>
                         
-                        <!-- Kontainer AJAX Render (Ditambahkan pb-12) -->
+                        <!-- Kontainer AJAX Render -->
                         <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0 pb-12">
                             <?php foreach($otherEmployees as $emp): 
                                 $emp_avatar = !empty($emp['avatar']) ? "assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($emp['name']);
                                 $emp_position = htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee'));
                                 $emp_department = htmlspecialchars($emp['department_name'] ?? 'Belum ada departemen');
                             ?>
-                                <!-- CARD KLIKABEL (Menyimpan data-uuid untuk URL dinamis) -->
+                                <!-- CARD KLIKABEL (Dengan Border Avatar Kustom) -->
                                 <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 hover:shadow-md cursor-pointer relative z-0 group"
                                      onclick="openEmployeeDetail(this)"
                                      data-id="<?= $emp['id'] ?>"
@@ -185,7 +201,10 @@ require_once __DIR__ . '/components/sidebar.php';
                                      data-position="<?= $emp_position ?>"
                                      data-department="<?= $emp_department ?>"
                                 >
-                                    <img src="<?= $emp_avatar ?>" alt="Profile" class="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-sm shrink-0 transition-transform bg-gray-50 object-cover group-hover:scale-105">
+                                    <!-- AVATAR DENGAN BORDER SAMAA SEPERTI SECTION ABSENT -->
+                                    <div class="w-12 h-12 md:w-14 md:h-14 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white shrink-0 group-hover:scale-105 transition-transform">
+                                        <img src="<?= $emp_avatar ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
+                                    </div>
                                     
                                     <div class="flex-1 min-w-0">
                                         <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= htmlspecialchars($emp['name']) ?></h4>
@@ -231,7 +250,9 @@ require_once __DIR__ . '/components/sidebar.php';
             
             <!-- Header Profil -->
             <div class="flex items-center gap-4 mb-6">
-                <img id="detAvatar" src="" alt="Avatar" class="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover shadow-sm bg-gray-50 border border-gray-100">
+                <div class="w-16 h-16 md:w-20 md:h-20 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white shrink-0 shadow-sm">
+                    <img id="detAvatar" src="" alt="Avatar" class="w-full h-full rounded-full object-cover">
+                </div>
                 <div class="flex-1 min-w-0">
                     <h3 id="detName" class="text-lg md:text-xl font-bold text-gray-800 truncate">Nama</h3>
                     <p id="detPosition" class="text-xs text-gray-500 font-medium truncate mt-0.5">Posisi</p>
@@ -269,7 +290,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- ================= BOTTOM SHEET REQUEST ================= -->
 <div id="requestBottomSheet" class="fixed inset-0 z-50 hidden">
-    <!-- Konten Sheet sama seperti sebelumnya -->
     <div id="requestOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300"></div>
     <div id="requestSheet" class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-3xl shadow-2xl transform translate-y-full transition-transform duration-300 ease-in-out pb-safe">
         <div class="p-5 pb-8 md:max-w-md md:mx-auto">
@@ -303,7 +323,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // LOGIKA MODAL DETAIL KARYAWAN
     // ==========================================
     let currentDetailEmpId = null;
-    let currentDetailEmpUuid = null; // Menyimpan UUID tujuan edit
+    let currentDetailEmpUuid = null;
 
     function openEmployeeDetail(el) {
         currentDetailEmpId = el.getAttribute('data-id');
@@ -359,7 +379,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
     function editEmployee() {
         if (!currentDetailEmpUuid) return;
-        // Pindah URL menggunakan SEO URL berbasis UUID
         window.location.href = "employee_edit/user/" + currentDetailEmpUuid;
     }
 
