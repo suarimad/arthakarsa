@@ -42,13 +42,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$name, $email, $phone, $address, $tenant_id]);
 
-            // 2. Update tabel tenant_settings (Gunakan UPSERT agar aman jika belum ada barisnya)
-            $stmtSet = $pdo->prepare("
-                INSERT INTO tenant_settings (tenant_id, attendance_method) 
-                VALUES (?, ?) 
-                ON DUPLICATE KEY UPDATE attendance_method = VALUES(attendance_method)
-            ");
-            $stmtSet->execute([$tenant_id, $attendance_method]);
+            // 2. Update atau Insert tabel tenant_settings (Cek manual keberadaan data)
+            $stmtCheck = $pdo->prepare("SELECT id FROM tenant_settings WHERE tenant_id = ?");
+            $stmtCheck->execute([$tenant_id]);
+            $settingExists = $stmtCheck->fetch();
+
+            if ($settingExists) {
+                // Jika data sudah ada, lakukan UPDATE
+                $stmtSet = $pdo->prepare("
+                    UPDATE tenant_settings 
+                    SET attendance_method = ? 
+                    WHERE tenant_id = ?
+                ");
+                $stmtSet->execute([$attendance_method, $tenant_id]);
+            } else {
+                // Jika data belum ada, lakukan INSERT
+                $stmtSet = $pdo->prepare("
+                    INSERT INTO tenant_settings (tenant_id, attendance_method) 
+                    VALUES (?, ?)
+                ");
+                $stmtSet->execute([$tenant_id, $attendance_method]);
+            }
 
             $pdo->commit();
 
