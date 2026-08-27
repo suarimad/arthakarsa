@@ -119,7 +119,7 @@ require_once __DIR__ . '/components/sidebar.php';
         </div>
 
         <!-- PAGE CONTENT: Margin top disesuaikan untuk mobile krn header hilang -->
-        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full max-w-2xl mx-auto">
+        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto">
             
             <!-- Judul & Back Button -->
             <div class="flex items-center gap-3 px-1 mb-6">
