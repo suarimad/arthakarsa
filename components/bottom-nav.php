@@ -9,20 +9,20 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
 ?>
 
 <!-- 1. NAVIGATION BAR (Hanya Tampil di Mobile) -->
-<!-- PENYESUAIAN: Ditambahkan id="mobileBottomNav", left-0, right-0, dan z-[99] agar absolut di atas konten -->
-<nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 w-full bg-surface border-t border-gray-200 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-[99]">
+<!-- Z-index diturunkan ke 90 agar tidak menghalangi modal/bottom-sheet -->
+<nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 w-full bg-surface border-t border-gray-200 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-[90]">
     <div class="flex justify-between items-center px-5 py-4 relative">
         
-        <!-- 1. Home -->
+        <!-- 1. Beranda -->
         <a href="<?= $base_url ?? '' ?>/index" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'index') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
             <i data-lucide="home" class="w-5 h-5"></i>
-            <span class="text-[9px] <?= ($current_page == 'index') ? 'font-semibold' : 'font-medium' ?>">Home</span>
+            <span class="text-[9px] <?= ($current_page == 'index') ? 'font-semibold' : 'font-medium' ?>">Beranda</span>
         </a>
         
-        <!-- 2. Employees -->
+        <!-- 2. Karyawan -->
         <a href="<?= $base_url ?? '' ?>/employee" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'employee') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
             <i data-lucide="users" class="w-5 h-5"></i>
-            <span class="text-[9px] <?= ($current_page == 'employee') ? 'font-semibold' : 'font-medium' ?>">Employees</span>
+            <span class="text-[9px] <?= ($current_page == 'employee') ? 'font-semibold' : 'font-medium' ?>">Karyawan</span>
         </a>
         
         <!-- 3. MENU UTAMA (FAB Tengah Mengambang) -->
@@ -33,25 +33,76 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
             <span class="text-[9px] font-medium text-gray-400 mt-7 pt-0.5">Menu</span>
         </div>
         
-        <!-- 4. REQUEST -->
+        <!-- 4. Pengajuan -->
         <a href="#" id="requestBtn" class="flex flex-col items-center gap-1.5 w-12 text-gray-400 hover:text-primary transition">
             <i data-lucide="file-plus" class="w-5 h-5"></i>
-            <span class="text-[9px] font-medium">Request</span>
+            <span class="text-[9px] font-medium">Pengajuan</span>
         </a>
         
-        <!-- 5. Profile -->
+        <!-- 5. Profil -->
         <a href="<?= $base_url ?? '' ?>/profile" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
             <i data-lucide="user" class="w-5 h-5"></i>
-            <span class="text-[9px] <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'font-semibold' : 'font-medium' ?>">Profile</span>
+            <span class="text-[9px] <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'font-semibold' : 'font-medium' ?>">Profil</span>
         </a>
 
     </div>
 </nav>
 
 <!-- ========================================================================= -->
-<!-- 2. MODAL / BOTTOM SHEET MENU UTAMA (Tersedia di Mobile & Desktop)         -->
+<!-- 2. MODAL / BOTTOM SHEET REQUEST (Hanya Tampil Saat Diklik)                -->
 <!-- ========================================================================= -->
-<div id="mainMenuModal" class="fixed inset-0 z-[100] hidden">
+<div id="requestBottomSheet" class="fixed inset-0 hidden" style="z-index: 999999;">
+    <!-- Overlay -->
+    <div id="requestOverlay" onclick="closeRequestSheet()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    
+    <!-- Sheet Container -->
+    <div id="requestSheet" class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-3xl shadow-2xl transform translate-y-full transition-transform duration-300 ease-in-out pb-safe pointer-events-auto">
+        <div class="p-5 pb-8 md:max-w-md md:mx-auto relative">
+            
+            <!-- Handle Bar untuk Gestur Tutup -->
+            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5 cursor-pointer" onclick="closeRequestSheet()"></div>
+            
+            <h3 class="text-base font-bold text-gray-800 mb-6 text-center">Buat Pengajuan</h3>
+            
+            <!-- 4 Pilihan Menu Pengajuan (Cuti, Sakit, Izin, Lembur) -->
+            <div class="grid grid-cols-2 gap-4">
+                <a href="<?= $base_url ?? '' ?>/leave_add/cuti" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:bg-primary group-hover:text-surface transition shadow-sm">
+                        <i data-lucide="calendar-off" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600">Cuti</span>
+                </a>
+                
+                <a href="<?= $base_url ?? '' ?>/leave_add/sakit" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center group-hover:bg-pending group-hover:text-surface transition shadow-sm">
+                        <i data-lucide="stethoscope" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600">Sakit</span>
+                </a>
+                
+                <a href="<?= $base_url ?? '' ?>/leave_add/izin" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition shadow-sm">
+                        <i data-lucide="user-minus" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600">Izin</span>
+                </a>
+                
+                <a href="<?= $base_url ?? '' ?>/overtime_add" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-success/10 text-success rounded-full flex items-center justify-center group-hover:bg-success group-hover:text-surface transition shadow-sm">
+                        <i data-lucide="clock-4" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600">Lembur</span>
+                </a>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- 3. MODAL / BOTTOM SHEET MENU UTAMA (Tersedia di Mobile & Desktop)         -->
+<!-- ========================================================================= -->
+<div id="mainMenuModal" class="fixed inset-0 hidden" style="z-index: 999999;">
     <!-- Overlay -->
     <div id="mainMenuOverlay" onclick="closeMainMenu()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
@@ -80,61 +131,60 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                 
                 <!-- SECTION 1: EKSPLORASI FITUR (Muncul untuk semua orang) -->
                 <div>
-                    <!-- Judul disejajarkan dengan Grid -->
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Eksplorasi Fitur</h4>
                     
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="leave" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/leave" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="calendar-off" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-violet-600 transition-colors">Izin</span>
                         </a>
 
-                        <a href="overtime" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/overtime" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="clock-4" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Lembur</span>
                         </a>
 
-                        <a href="reimbursement" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/reimbursement" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="receipt" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-emerald-600 transition-colors">Reimburse</span>
                         </a>
 
-                        <a href="attendance" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/attendance" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="clipboard-list" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Log<br>Absensi</span>
                         </a>
 
-                        <a href="payslip" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/payslip" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="banknote" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-teal-600 transition-colors">Slip<br>Gaji</span>
                         </a>
 
-                        <a href="calendar" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/calendar" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="calendar-days" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-indigo-600 transition-colors">Kalender</span>
                         </a>
 
-                        <a href="review" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/review" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="star" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-amber-600 transition-colors">Review</span>
                         </a>
 
-                        <a href="project" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/project" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="briefcase" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
@@ -150,42 +200,42 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Admin Menu</h4>
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="setting_company" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/setting_company" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="building" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Perusahaan</span>
                         </a>
 
-                        <a href="setting_app" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/setting_app" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center group-hover:bg-slate-200 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="settings" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-slate-800 transition-colors">Aplikasi</span>
                         </a>
 
-                        <a href="department" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/department" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:bg-pink-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="network" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-pink-600 transition-colors">Department</span>
                         </a>
 
-                        <a href="position" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/position" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="user-cog" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Posisi</span>
                         </a>
 
-                        <a href="location" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/location" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="map-pin" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-red-600 transition-colors">Lokasi</span>
                         </a>
 
-                        <a href="shift" class="flex flex-col items-center gap-1.5 group">
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center group-hover:bg-cyan-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="clock" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
@@ -216,7 +266,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">HR Menu</h4>
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="hr_payslip" class="flex flex-col items-center gap-1.5 group">
+                        <a href="<?= $base_url ?? '' ?>/hr_payslip" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="file-text" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
@@ -292,12 +342,12 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
 </div>
 
 <!-- ========================================================================= -->
-<!-- 3. SCRIPT GLOBAL (PENYELAMAT DOM & LOGIKA MODAL)                          -->
+<!-- 4. SCRIPT GLOBAL (PENYELAMAT DOM & LOGIKA MODAL)                          -->
 <!-- ========================================================================= -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // FUNGSI 1: PENYELAMAT DOM (Mencegah Bottom Nav tenggelam di balik Scroll Container)
-        // Elemen-elemen ini akan dipindahkan secara paksa ke tag <body> 
+        // FUNGSI 1: PENYELAMAT DOM (Mencegah Modals/Nav tenggelam di balik Scroll Container halaman lain)
+        // Elemen-elemen ini akan dipindahkan secara paksa menjadi child langsung dari <body> 
         const elementsToMove = [
             document.getElementById('mobileBottomNav'),
             document.getElementById('mainMenuModal'),
@@ -312,35 +362,49 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
 
         // FUNGSI 2: EVENT LISTENER REQUEST BOTTOM SHEET
         const requestBtn = document.getElementById('requestBtn');
+        
+        if (requestBtn) {
+            requestBtn.addEventListener('click', (e) => { 
+                e.preventDefault(); 
+                openRequestSheet(); 
+            });
+        }
+    });
+
+    // =======================================================================
+    // Dideklarasikan di object window agar bisa dipanggil dari atribut onclick
+    // =======================================================================
+    
+    // LOGIKA REQUEST MODAL
+    window.openRequestSheet = function() {
         const bottomSheet = document.getElementById('requestBottomSheet');
         const overlay = document.getElementById('requestOverlay');
         const sheet = document.getElementById('requestSheet');
 
-        function openRequestSheet() {
-            if(!bottomSheet) return;
-            bottomSheet.classList.remove('hidden');
-            setTimeout(() => { 
-                if(overlay) overlay.classList.remove('opacity-0'); 
-                if(sheet) sheet.classList.remove('translate-y-full'); 
-            }, 10);
-        }
-
-        function closeRequestSheet() {
-            if(!bottomSheet) return;
-            if(overlay) overlay.classList.add('opacity-0'); 
-            if(sheet) sheet.classList.add('translate-y-full');
-            setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300);
-        }
-
-        if (requestBtn) requestBtn.addEventListener('click', (e) => { 
-            e.preventDefault(); 
-            openRequestSheet(); 
-        });
+        if(!bottomSheet) return;
+        bottomSheet.classList.remove('hidden');
         
-        if (overlay) overlay.addEventListener('click', closeRequestSheet);
-    });
+        setTimeout(() => { 
+            if(overlay) overlay.classList.remove('opacity-0'); 
+            if(sheet) sheet.classList.remove('translate-y-full'); 
+        }, 10);
+    }
 
-    // FUNGSI 3: LOGIKA MAIN MENU MODAL (Berjalan di window/global)
+    window.closeRequestSheet = function() {
+        const bottomSheet = document.getElementById('requestBottomSheet');
+        const overlay = document.getElementById('requestOverlay');
+        const sheet = document.getElementById('requestSheet');
+
+        if(!bottomSheet) return;
+        if(overlay) overlay.classList.add('opacity-0'); 
+        if(sheet) sheet.classList.add('translate-y-full');
+        
+        setTimeout(() => { 
+            bottomSheet.classList.add('hidden'); 
+        }, 300);
+    }
+
+    // LOGIKA MAIN MENU MODAL
     window.openMainMenu = function() {
         const m = document.getElementById('mainMenuModal');
         const o = document.getElementById('mainMenuOverlay');

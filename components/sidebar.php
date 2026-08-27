@@ -156,24 +156,31 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
             <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5 md:hidden"></div>
             <h3 class="text-base font-bold text-gray-800 mb-6 text-center">Buat Pengajuan</h3>
             
-            <div class="grid grid-cols-3 gap-4">
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+            <!-- GRID Disesuaikan menjadi grid-cols-2 agar pas menampung 4 menu -->
+            <div class="grid grid-cols-2 gap-4">
+                <a href="<?= $base_url ?? '' ?>/leave_add/cuti" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
                     <div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:bg-primary group-hover:text-surface transition shadow-sm">
                         <i data-lucide="calendar-off" class="w-5 h-5"></i>
                     </div>
-                    <span class="text-xs font-medium text-gray-600">Leave</span>
+                    <span class="text-xs font-medium text-gray-600">Cuti</span>
                 </a>
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                <a href="<?= $base_url ?? '' ?>/leave_add/sakit" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
                     <div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center group-hover:bg-pending group-hover:text-surface transition shadow-sm">
                         <i data-lucide="stethoscope" class="w-5 h-5"></i>
                     </div>
-                    <span class="text-xs font-medium text-gray-600">Sick</span>
+                    <span class="text-xs font-medium text-gray-600">Sakit</span>
                 </a>
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                <a href="<?= $base_url ?? '' ?>/leave_add/izin" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition shadow-sm">
+                        <i data-lucide="user-minus" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600">Izin</span>
+                </a>
+                <a href="<?= $base_url ?? '' ?>/overtime_add" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
                     <div class="w-12 h-12 bg-success/10 text-success rounded-full flex items-center justify-center group-hover:bg-success group-hover:text-surface transition shadow-sm">
                         <i data-lucide="clock-4" class="w-5 h-5"></i>
                     </div>
-                    <span class="text-xs font-medium text-gray-600">Overtime</span>
+                    <span class="text-xs font-medium text-gray-600">Lembur</span>
                 </a>
             </div>
         </div>
