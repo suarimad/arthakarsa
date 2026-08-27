@@ -265,7 +265,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     <section>
                         <div class="flex justify-between items-end mb-3 px-1">
                             <h3 class="text-xs md:text-sm font-semibold text-gray-800">Riwayat Kehadiran</h3>
-                            <a href="#" class="text-[11px] text-primary font-medium hover:underline">Lihat Semua</a>
+                            <a href="attendance" class="text-[11px] text-primary font-medium hover:underline">Lihat Semua</a>
                         </div>
                         
                         <div class="space-y-3">
@@ -475,22 +475,6 @@ require_once __DIR__ . '/components/sidebar.php';
                     <i data-lucide="shield-check" class="w-3.5 h-3.5 text-success"></i> 
                     Disclaimer: Foto tidak akan disimpan
                 </p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ================= BOTTOM SHEET REQUEST ================= -->
-<div id="requestBottomSheet" class="fixed inset-0 z-50 hidden">
-    <div id="requestOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300"></div>
-    <div id="requestSheet" class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-3xl shadow-2xl transform translate-y-full transition-transform duration-300 ease-in-out pb-safe">
-        <div class="p-5 pb-8 md:max-w-md md:mx-auto">
-            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5"></div>
-            <h3 class="text-sm font-semibold text-gray-800 mb-5 text-center">Buat Pengajuan</h3>
-            <div class="grid grid-cols-3 gap-4">
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group"><div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center"><i data-lucide="calendar-off" class="w-5 h-5"></i></div><span class="text-[11px] font-medium text-gray-600">Leave</span></a>
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group"><div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center"><i data-lucide="stethoscope" class="w-5 h-5"></i></div><span class="text-[11px] font-medium text-gray-600">Sick</span></a>
-                <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group"><div class="w-12 h-12 bg-success/10 text-success rounded-full flex items-center justify-center"><i data-lucide="clock-4" class="w-5 h-5"></i></div><span class="text-[11px] font-medium text-gray-600">Overtime</span></a>
             </div>
         </div>
     </div>
@@ -902,21 +886,6 @@ require_once __DIR__ . '/components/sidebar.php';
         setTimeout(() => attModal.classList.add('hidden'), 300);
     }
 
-    // ==========================================
-    // LOGIKA MODAL REQUEST BAWAAN
-    // ==========================================
-    document.addEventListener('DOMContentLoaded', () => {
-        const requestBtn = document.getElementById('requestBtn');
-        const bottomSheet = document.getElementById('requestBottomSheet');
-        const overlay = document.getElementById('requestOverlay');
-        const sheet = document.getElementById('requestSheet');
-
-        function openSheet() { bottomSheet.classList.remove('hidden'); setTimeout(() => { overlay.classList.remove('opacity-0'); sheet.classList.remove('translate-y-full'); }, 10); }
-        function closeSheet() { overlay.classList.add('opacity-0'); sheet.classList.add('translate-y-full'); setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300); }
-
-        if (requestBtn) requestBtn.addEventListener('click', (e) => { e.preventDefault(); openSheet(); });
-        if (overlay) overlay.addEventListener('click', closeSheet);
-    });
 </script>
 
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>
