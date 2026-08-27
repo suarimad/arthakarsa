@@ -10,3 +10,9 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+assets/img/attendances/*
+!assets/img/attendances/.gitkeep
+
+assets/img/avatars/*
+!assets/img/avatars/.gitkeep
