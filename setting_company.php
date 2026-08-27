@@ -114,11 +114,6 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php require_once __DIR__ . '/components/header.php'; ?>
         </div>
 
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[999] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
-        </div>
-
         <!-- PAGE CONTENT: Margin top disesuaikan untuk mobile krn header hilang -->
         <div class="px-5 md:px-0 mt-6 md:mt-2 w-full max-w-2xl mx-auto">
             
@@ -201,36 +196,18 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <!-- Bottom Nav sengaja TIDAK dipanggil agar bersih di layar form (mobile) -->
 
+<!-- Komponen Toast Global -->
+<?php require_once __DIR__ . '/components/toast.php'; ?>
+
 <script>
     lucide.createIcons();
 
-    function showToast(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
-
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-[999] transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
-        }
-        lucide.createIcons();
-
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-    }
-
+    // Penanganan Toast Dinamis (Menggunakan komponen toast global)
     const phpMsg = <?= json_encode($toast_msg) ?>;
     const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) showToast(phpMsg, phpType);
+    if (phpMsg && typeof window.showToast === 'function') {
+        window.showToast(phpMsg, phpType);
+    }
 </script>
 
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>
