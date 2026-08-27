@@ -237,7 +237,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <?php endif; ?>
                             </div>
                             
-                            <!-- LOGIKA DISABLED BUTTONS -->
+                            <!-- LOGIKA DISABLED BUTTONS (Termasuk Mode Tap Only) -->
                             <div class="flex gap-3 md:w-2/3 lg:w-1/2">
                                 <?php if($has_clocked_in): ?>
                                     <button disabled class="flex-1 bg-white/20 text-white/80 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
@@ -387,12 +387,11 @@ require_once __DIR__ . '/components/sidebar.php';
     </div>
 </div>
 
-<!-- ================= MODAL ABSENSI DINAMIS ================= -->
+<!-- ================= MODAL ABSENSI DINAMIS (Compact & Full) ================= -->
 <div id="attendanceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <div id="attendanceOverlay" onclick="closeAttendance()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
-        <!-- Card Container Responsive: Max-width menjadi 3xl (lebar) di desktop agar proporsi aspect-video pas -->
         <div id="attendanceCard" class="bg-surface w-full max-w-sm md:max-w-3xl rounded-3xl shadow-2xl transform scale-95 opacity-0 transition-all duration-300 pointer-events-auto relative overflow-hidden flex flex-col">
             
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
@@ -409,25 +408,38 @@ require_once __DIR__ . '/components/sidebar.php';
             <div id="cameraUI" class="relative bg-black aspect-[3/4] md:aspect-video w-full items-center justify-center overflow-hidden hidden">
                 <video id="cameraStream" autoplay playsinline class="w-full h-full object-cover"></video>
                 
-                <div class="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10 z-10">
-                    <div class="flex items-start gap-2">
-                        <i data-lucide="scan-face" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-[10px] text-white/70 font-medium mb-1 border-b border-white/10 pb-1">Status Validasi</p>
-                            <p id="locationStatusCamera" class="text-[11px] text-white font-medium leading-relaxed animate-pulse">Menyiapkan sistem...</p>
+                <!-- Kontainer Bawah untuk Status & Tombol -->
+                <div class="absolute bottom-4 left-4 right-4 z-10 flex flex-col gap-3">
+                    
+                    <!-- Tombol Flip Kamera (Hanya muncul jika geo_photo / photo_only) -->
+                    <div id="flipCameraContainer" class="self-end hidden mb-1">
+                        <button type="button" onclick="flipCamera()" class="bg-black/50 backdrop-blur-md text-white p-2.5 rounded-full border border-white/10 hover:bg-white/20 transition shadow-lg active:scale-95">
+                            <i data-lucide="switch-camera" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <!-- Box Status Validasi -->
+                    <div class="bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10 w-full shadow-lg">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="scan-face" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-[10px] text-white/70 font-medium mb-1 border-b border-white/10 pb-1">Status Validasi</p>
+                                <p id="locationStatusCamera" class="text-[11px] text-white font-medium leading-relaxed animate-pulse">Menyiapkan sistem...</p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Tombol Manual Mengambang di atas status box (tidak ada backdrop hitam yang full layar) -->
-                <div id="manualActionCamera" class="absolute bottom-24 left-0 right-0 flex items-center justify-center hidden z-20">
-                    <button id="btnManualCamera" onclick="manualCaptureAndSubmit()" class="bg-primary text-surface px-6 py-3 rounded-2xl shadow-xl border border-white/20 font-bold flex items-center gap-2 hover:scale-105 transition active:scale-95">
-                        <i data-lucide="camera" class="w-5 h-5"></i> Ambil Foto & Absen
-                    </button>
+                    <!-- Tombol Ambil Foto Manual (Ada di Bawah Status, Tidak menutupi Kamera Utama) -->
+                    <div id="manualActionCamera" class="w-full hidden">
+                        <button id="btnManualCamera" onclick="manualCaptureAndSubmit()" class="w-full bg-primary text-surface px-6 py-3.5 rounded-xl shadow-xl border border-white/20 font-bold flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-95">
+                            <i data-lucide="camera" class="w-5 h-5"></i> Ambil Foto & Absen
+                        </button>
+                    </div>
+
                 </div>
             </div>
 
-            <!-- UI 2: MODE NON-KAMERA -->
+            <!-- UI 2: MODE NON-KAMERA (Lebih Compact, Tanpa Video) -->
             <div id="noCameraUI" class="relative bg-gray-50 aspect-[3/4] md:aspect-video w-full flex-col items-center justify-center overflow-hidden hidden p-6">
                 <!-- Motif Latar Belakang -->
                 <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#ea3800 1px, transparent 1px); background-size: 20px 20px;"></div>
@@ -550,6 +562,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // LOGIKA ABSENSI DINAMIS (METODE CUSTOM)
     // ==========================================
     let cameraStream = null, faceInterval = null, isProcessing = false; 
+    let currentFacingMode = 'user'; // Dinamis sesuai konfigurasi & switch
 
     const attModal = document.getElementById('attendanceModal');
     const attOverlay = document.getElementById('attendanceOverlay');
@@ -572,7 +585,7 @@ require_once __DIR__ . '/components/sidebar.php';
     const shiftStartDB = "<?= $shift_start_db ?>";
     const shiftEndDB = "<?= $shift_end_db ?>";
 
-    // Configuration Mapper: Mengontrol prilaku Hardware & UI
+    // Configuration Mapper
     const methodConfig = {
         'geo_face':       { gps: true,  radius: true,  camera: true,  ai: true,  facing: 'user' },
         'geo_only':       { gps: true,  radius: true,  camera: false, ai: false, facing: null },
@@ -596,13 +609,11 @@ require_once __DIR__ . '/components/sidebar.php';
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
     }
 
-    // --- FUNGSI UTAMA TAP ONLY ---
     window.handleTapOnly = function(type) {
         isProcessing = true;
         submitToServer('', type);
     }
 
-    // --- HELPER UI ---
     function setPinState(state) {
         const pinParent = document.getElementById('pinAnimation');
         if(!pinParent) return;
@@ -642,11 +653,33 @@ require_once __DIR__ . '/components/sidebar.php';
         }
     }
 
-    // --- SIKLUS MODAL ABSENSI ---
+    // --- FUNGSI FLIP KAMERA ---
+    window.flipCamera = function() {
+        if (!cameraStream) return;
+        currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+        
+        if(currentFacingMode === 'user') video.classList.add('scale-x-[-1]');
+        else video.classList.remove('scale-x-[-1]');
+
+        cameraStream.getTracks().forEach(track => track.stop());
+
+        const constraints = { video: { facingMode: { ideal: currentFacingMode } } };
+        navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            cameraStream = stream;
+            video.srcObject = stream;
+        })
+        .catch(function(err) {
+            window.showToast('Gagal membalik kamera.', 'error');
+        });
+    }
+
     function openAttendance(type) {
         if(methodConfig.ai && !savedFaceDescriptor) { openFaceWarning(); return; }
 
         isProcessing = false; 
+        currentFacingMode = methodConfig.facing; // Setel ke default konfig
+        
         attType.value = type;
         attTitle.innerText = type === 'in' ? 'Absen Masuk' : 'Absen Pulang';
         
@@ -654,7 +687,6 @@ require_once __DIR__ . '/components/sidebar.php';
         attTime.innerText = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' WIB';
         attLat.value = ""; attLng.value = "";
 
-        // Siapkan UI berdasarkan konfigurasi kamera
         if(methodConfig.camera) {
             document.getElementById('cameraUI').classList.remove('hidden');
             document.getElementById('cameraUI').classList.add('flex');
@@ -663,11 +695,16 @@ require_once __DIR__ . '/components/sidebar.php';
             document.getElementById('manualActionCamera').classList.add('hidden');
             document.getElementById('modalFooter').classList.remove('hidden'); 
             
-            if(methodConfig.facing === 'user') {
-                video.classList.add('scale-x-[-1]');
+            if(currentFacingMode === 'user') video.classList.add('scale-x-[-1]');
+            else video.classList.remove('scale-x-[-1]');
+
+            // Tampilkan tombol Flip Camera JIKA metodenya foto (Bisa ke belakang / ke depan)
+            if(attendanceMethod === 'geo_photo' || attendanceMethod === 'photo_only') {
+                document.getElementById('flipCameraContainer').classList.remove('hidden');
             } else {
-                video.classList.remove('scale-x-[-1]');
+                document.getElementById('flipCameraContainer').classList.add('hidden');
             }
+
         } else {
             document.getElementById('cameraUI').classList.add('hidden');
             document.getElementById('cameraUI').classList.remove('flex');
@@ -689,7 +726,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
         if (methodConfig.camera) {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                const constraints = { video: { facingMode: methodConfig.facing ? { ideal: methodConfig.facing } : true } };
+                const constraints = { video: { facingMode: currentFacingMode ? { ideal: currentFacingMode } : true } };
                 
                 navigator.mediaDevices.getUserMedia(constraints)
                 .then(function(stream) {
@@ -803,7 +840,7 @@ require_once __DIR__ . '/components/sidebar.php';
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
-        if(methodConfig.facing === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); } 
+        if(currentFacingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); } 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         submitToServer(canvas.toDataURL('image/jpeg', 0.8), attType.value);
     }
@@ -817,7 +854,7 @@ require_once __DIR__ . '/components/sidebar.php';
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
-            if(methodConfig.facing === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+            if(currentFacingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             base64Image = canvas.toDataURL('image/jpeg', 0.8);
         }
