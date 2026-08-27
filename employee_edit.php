@@ -120,16 +120,17 @@ try {
     $stmtPos->execute([$tenant_id]);
     $positions = $stmtPos->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil data user yang bisa menjadi atasan (Role Manager, HR, Admin, Superadmin)
+    // Ambil data user yang bisa menjadi atasan + nama departemennya
     $stmtMgr = $pdo->prepare("
-        SELECT u.id, u.name, p.department_id 
+        SELECT u.id, u.name, p.department_id, d.name as department_name 
         FROM users u 
         LEFT JOIN positions p ON u.position_id = p.id 
+        LEFT JOIN departments d ON p.department_id = d.id
         LEFT JOIN roles r ON u.role_id = r.id 
-        WHERE u.tenant_id = ? AND r.name IN ('manager', 'hr', 'admin', 'superadmin') AND u.deleted_at IS NULL
+        WHERE u.tenant_id = ? AND r.name IN ('manager', 'hr', 'admin', 'superadmin') AND u.deleted_at IS NULL AND u.id != ?
         ORDER BY u.name ASC
     ");
-    $stmtMgr->execute([$tenant_id]);
+    $stmtMgr->execute([$tenant_id, $editUser['id']]);
     $managers = $stmtMgr->fetchAll(PDO::FETCH_ASSOC);
 
     $stmtLoc = $pdo->prepare("SELECT id, name FROM locations WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY name ASC");
@@ -275,7 +276,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                         <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                                     </div>
                                 <?php else: 
-                                    // Kamus penerjemah untuk role display name
                                     $display_roles = [
                                         'employee'   => 'Karyawan Standar (Employee)',
                                         'manager'    => 'Manajer (Manager)',
@@ -323,8 +323,11 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <?php $currentMgr = $_POST['manager_id'] ?? $editUser['manager_id'] ?? ''; ?>
                                 <select name="manager_id" id="manager_id" class="select2 w-full" data-placeholder="-- Pilih Atasan (Opsional) --">
                                     <option value="">-- Pilih Atasan (Opsional) --</option>
-                                    <?php foreach($managers as $mgr): ?>
-                                        <option value="<?= $mgr['id'] ?>" data-dept="<?= $mgr['department_id'] ?>" <?= ($currentMgr == $mgr['id']) ? 'selected' : '' ?>><?= htmlspecialchars($mgr['name']) ?></option>
+                                    <?php foreach($managers as $mgr): 
+                                        $mgr_dept = !empty($mgr['department_name']) ? ' - ' . $mgr['department_name'] : ' - Tanpa Departemen';
+                                        $mgr_label = $mgr['name'] . $mgr_dept;
+                                    ?>
+                                        <option value="<?= $mgr['id'] ?>" data-dept="<?= $mgr['department_id'] ?>" <?= ($currentMgr == $mgr['id']) ? 'selected' : '' ?>><?= htmlspecialchars($mgr_label) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="text-[9px] text-gray-400 mt-1.5">Opsi atasan akan difilter otomatis berdasarkan departemen.</p>
@@ -372,7 +375,7 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
-<!-- Komponen Toast Global (Local/Validation Error) -->
+<!-- Komponen Toast Global -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
