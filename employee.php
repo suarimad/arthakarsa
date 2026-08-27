@@ -293,7 +293,8 @@ require_once __DIR__ . '/components/sidebar.php';
     <div id="employeeDetailOverlay" onclick="closeEmployeeDetail()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
-        <div id="employeeDetailCard" class="bg-surface w-full max-w-sm rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col p-6">
+        <!-- PERBAIKAN: md:max-w-sm memastikan di mobile menjadi w-full, dan desktop max-w-sm -->
+        <div id="employeeDetailCard" class="bg-surface w-full md:max-w-sm rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col p-6">
             
             <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeEmployeeDetail()">
                 <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
@@ -363,6 +364,9 @@ require_once __DIR__ . '/components/sidebar.php';
         </div>
     </div>
 </div>
+
+<!-- Load Bottom Nav (PENTING: Di-load agar navigasi muncul di mobile) -->
+<?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
 <!-- Komponen Toast Global (Menangkap Session) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>

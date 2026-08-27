@@ -12,6 +12,7 @@
     <meta name="description" content="<?= htmlspecialchars($app_settings['description'] ?? '') ?>">
     <!-- <meta name="theme-color" content="<?= htmlspecialchars($app_settings['theme_color'] ?? '#ea3800') ?>"> -->
     <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <!-- PWA & Favicon Dinamis -->
     <link rel="manifest" href="<?= $base_url ?>/manifest.php">
     <link rel="icon" type="image/png" href="<?= $logo_path . ($app_settings['favicon'] ?? 'default_favicon.png') ?>">

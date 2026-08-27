@@ -8,11 +8,9 @@ if ($current_page == '') $current_page = 'index';
 $bn_role_name = strtolower($_SESSION['role'] ?? '');
 ?>
 
-<!-- ========================================================================= -->
-<!-- 1. NAVIGATION BAR (Hanya Tampil di Mobile)                                -->
-<!-- ========================================================================= -->
-<!-- z-[80] dipastikan agar selalu berada di atas semua konten halaman -->
-<nav class="md:hidden fixed bottom-0 w-full bg-surface border-t border-gray-200 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.04)] z-[80]">
+<!-- 1. NAVIGATION BAR (Hanya Tampil di Mobile) -->
+<!-- PENYESUAIAN: Ditambahkan id="mobileBottomNav", left-0, right-0, dan z-[99] agar absolut di atas konten -->
+<nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 w-full bg-surface border-t border-gray-200 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-[99]">
     <div class="flex justify-between items-center px-5 py-4 relative">
         
         <!-- 1. Home -->
@@ -35,25 +33,25 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
             <span class="text-[9px] font-medium text-gray-400 mt-7 pt-0.5">Menu</span>
         </div>
         
-        <!-- 4. REQUEST (Terhubung langsung ke fungsi JS global di bawah) -->
-        <button onclick="openRequestSheet()" class="flex flex-col items-center gap-1.5 w-12 text-gray-400 hover:text-primary transition">
+        <!-- 4. REQUEST -->
+        <a href="#" id="requestBtn" class="flex flex-col items-center gap-1.5 w-12 text-gray-400 hover:text-primary transition">
             <i data-lucide="file-plus" class="w-5 h-5"></i>
             <span class="text-[9px] font-medium">Request</span>
-        </button>
+        </a>
         
         <!-- 5. Profile -->
-        <a href="<?= $base_url ?? '' ?>/profile" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
+        <a href="<?= $base_url ?? '' ?>/profile" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
             <i data-lucide="user" class="w-5 h-5"></i>
-            <span class="text-[9px] <?= ($current_page == 'profile') ? 'font-semibold' : 'font-medium' ?>">Profile</span>
+            <span class="text-[9px] <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'font-semibold' : 'font-medium' ?>">Profile</span>
         </a>
 
     </div>
 </nav>
 
 <!-- ========================================================================= -->
-<!-- 2. MODAL / BOTTOM SHEET MENU UTAMA                                        -->
+<!-- 2. MODAL / BOTTOM SHEET MENU UTAMA (Tersedia di Mobile & Desktop)         -->
 <!-- ========================================================================= -->
-<div id="mainMenuModal" class="fixed inset-0 z-[90] hidden">
+<div id="mainMenuModal" class="fixed inset-0 z-[100] hidden">
     <!-- Overlay -->
     <div id="mainMenuOverlay" onclick="closeMainMenu()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
@@ -80,11 +78,13 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
             <!-- Area Konten Menu (Scrollable) -->
             <div class="overflow-y-auto p-5 pb-12 md:p-8 md:pb-8 space-y-8 flex-1 overscroll-y-contain">
                 
-                <!-- SECTION 1: EKSPLORASI FITUR -->
+                <!-- SECTION 1: EKSPLORASI FITUR (Muncul untuk semua orang) -->
                 <div>
+                    <!-- Judul disejajarkan dengan Grid -->
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Eksplorasi Fitur</h4>
                     
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
+                        
                         <a href="leave" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="calendar-off" class="w-6 h-6 md:w-7 md:h-7"></i>
@@ -140,6 +140,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-rose-600 transition-colors">Proyek</span>
                         </a>
+
                     </div>
                 </div>
 
@@ -148,6 +149,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                 <div>
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Admin Menu</h4>
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
+                        
                         <a href="setting_company" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="building" class="w-6 h-6 md:w-7 md:h-7"></i>
@@ -203,6 +205,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-slate-800 transition-colors">Tenant DB</span>
                         </a>
+
                     </div>
                 </div>
                 <?php endif; ?>
@@ -212,6 +215,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                 <div>
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">HR Menu</h4>
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
+                        
                         <a href="hr_payslip" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="file-text" class="w-6 h-6 md:w-7 md:h-7"></i>
@@ -239,6 +243,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-emerald-600 transition-colors">Kasbon<br>Karyawan</span>
                         </a>
+
                     </div>
                 </div>
                 <?php endif; ?>
@@ -248,6 +253,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                 <div>
                     <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Manager Menu</h4>
                     <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
+                        
                         <a href="review" class="flex flex-col items-center gap-1.5 group">
                             <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-all shadow-sm group-hover:scale-110">
                                 <i data-lucide="star-half" class="w-6 h-6 md:w-7 md:h-7"></i>
@@ -275,6 +281,7 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Timesheet<br>Tim</span>
                         </a>
+
                     </div>
                 </div>
                 <?php endif; ?>
@@ -285,68 +292,71 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
 </div>
 
 <!-- ========================================================================= -->
-<!-- 3. BOTTOM SHEET REQUEST (Telah Disatukan Secara Terpusat)                 -->
-<!-- ========================================================================= -->
-<div id="requestBottomSheet" class="fixed inset-0 z-[90] hidden">
-    <div id="requestOverlay" onclick="closeRequestSheet()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
-    
-    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
-        <div id="requestSheet" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative pb-safe">
-            <div class="p-6 md:p-8">
-                <!-- Handle Slide Mobile -->
-                <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden"></div>
-                
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-base font-bold text-gray-800">Buat Pengajuan</h3>
-                    <button onclick="closeRequestSheet()" class="hidden md:block text-gray-400 hover:text-failed transition">
-                        <i data-lucide="x" class="w-5 h-5"></i>
-                    </button>
-                </div>
-                
-                <div class="grid grid-cols-3 gap-4">
-                    <a href="<?= $base_url ?? '' ?>/leave" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
-                        <div class="w-14 h-14 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center group-hover:bg-violet-600 group-hover:text-surface transition shadow-sm">
-                            <i data-lucide="calendar-off" class="w-6 h-6"></i>
-                        </div>
-                        <span class="text-[11px] font-bold text-gray-600 group-hover:text-violet-600">Leave</span>
-                    </a>
-                    
-                    <a href="<?= $base_url ?? '' ?>/sick" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
-                        <div class="w-14 h-14 bg-pink-50 text-pink-600 rounded-2xl flex items-center justify-center group-hover:bg-pink-600 group-hover:text-surface transition shadow-sm">
-                            <i data-lucide="stethoscope" class="w-6 h-6"></i>
-                        </div>
-                        <span class="text-[11px] font-bold text-gray-600 group-hover:text-pink-600">Sick</span>
-                    </a>
-                    
-                    <a href="<?= $base_url ?? '' ?>/overtime" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group">
-                        <div class="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center group-hover:bg-orange-600 group-hover:text-surface transition shadow-sm">
-                            <i data-lucide="clock-4" class="w-6 h-6"></i>
-                        </div>
-                        <span class="text-[11px] font-bold text-gray-600 group-hover:text-orange-600">Overtime</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ========================================================================= -->
-<!-- 4. SCRIPT GLOBAL UNTUK MENGENDALIKAN MODAL MENU & REQUEST                 -->
+<!-- 3. SCRIPT GLOBAL (PENYELAMAT DOM & LOGIKA MODAL)                          -->
 <!-- ========================================================================= -->
 <script>
-    // Memastikan fungsi dapat dipanggil secara global
+    document.addEventListener('DOMContentLoaded', () => {
+        // FUNGSI 1: PENYELAMAT DOM (Mencegah Bottom Nav tenggelam di balik Scroll Container)
+        // Elemen-elemen ini akan dipindahkan secara paksa ke tag <body> 
+        const elementsToMove = [
+            document.getElementById('mobileBottomNav'),
+            document.getElementById('mainMenuModal'),
+            document.getElementById('requestBottomSheet')
+        ];
+
+        elementsToMove.forEach(el => {
+            if (el && el.parentNode !== document.body) {
+                document.body.appendChild(el);
+            }
+        });
+
+        // FUNGSI 2: EVENT LISTENER REQUEST BOTTOM SHEET
+        const requestBtn = document.getElementById('requestBtn');
+        const bottomSheet = document.getElementById('requestBottomSheet');
+        const overlay = document.getElementById('requestOverlay');
+        const sheet = document.getElementById('requestSheet');
+
+        function openRequestSheet() {
+            if(!bottomSheet) return;
+            bottomSheet.classList.remove('hidden');
+            setTimeout(() => { 
+                if(overlay) overlay.classList.remove('opacity-0'); 
+                if(sheet) sheet.classList.remove('translate-y-full'); 
+            }, 10);
+        }
+
+        function closeRequestSheet() {
+            if(!bottomSheet) return;
+            if(overlay) overlay.classList.add('opacity-0'); 
+            if(sheet) sheet.classList.add('translate-y-full');
+            setTimeout(() => { bottomSheet.classList.add('hidden'); }, 300);
+        }
+
+        if (requestBtn) requestBtn.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            openRequestSheet(); 
+        });
+        
+        if (overlay) overlay.addEventListener('click', closeRequestSheet);
+    });
+
+    // FUNGSI 3: LOGIKA MAIN MENU MODAL (Berjalan di window/global)
     window.openMainMenu = function() {
         const m = document.getElementById('mainMenuModal');
         const o = document.getElementById('mainMenuOverlay');
         const c = document.getElementById('mainMenuCard');
         
+        if(!m) return;
         m.classList.remove('hidden');
+        
         if (typeof lucide !== 'undefined') lucide.createIcons();
         
         setTimeout(() => {
-            o.classList.remove('opacity-0');
-            c.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
-            c.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
+            if(o) o.classList.remove('opacity-0');
+            if(c) {
+                c.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
+                c.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
+            }
         }, 10);
     }
 
@@ -355,38 +365,15 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
         const o = document.getElementById('mainMenuOverlay');
         const c = document.getElementById('mainMenuCard');
         
-        o.classList.add('opacity-0');
-        c.classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100');
-        c.classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0');
+        if(!m) return;
+        if(o) o.classList.add('opacity-0');
+        if(c) {
+            c.classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100');
+            c.classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0');
+        }
         
-        setTimeout(() => { m.classList.add('hidden'); }, 300);
-    }
-
-    // Fungsi Request Bottom Sheet (Sekarang terpusat)
-    window.openRequestSheet = function() {
-        const m = document.getElementById('requestBottomSheet');
-        const o = document.getElementById('requestOverlay');
-        const s = document.getElementById('requestSheet');
-        
-        m.classList.remove('hidden');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        
-        setTimeout(() => {
-            o.classList.remove('opacity-0');
-            s.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
-            s.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
-        }, 10);
-    }
-
-    window.closeRequestSheet = function() {
-        const m = document.getElementById('requestBottomSheet');
-        const o = document.getElementById('requestOverlay');
-        const s = document.getElementById('requestSheet');
-        
-        o.classList.add('opacity-0');
-        s.classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100');
-        s.classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0');
-        
-        setTimeout(() => { m.classList.add('hidden'); }, 300);
+        setTimeout(() => { 
+            m.classList.add('hidden'); 
+        }, 300);
     }
 </script>
