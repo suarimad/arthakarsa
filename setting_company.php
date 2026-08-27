@@ -25,12 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $address = trim($_POST['address'] ?? '');
+    $attendance_method = $_POST['attendance_method'] ?? 'geo_face';
 
     if (empty($name)) {
         $toast_msg = "Nama perusahaan wajib diisi!";
         $toast_type = "warning";
     } else {
         try {
+            $pdo->beginTransaction(); // Gunakan transaksi karena mengupdate 2 tabel
+
+            // 1. Update tabel tenants
             $stmt = $pdo->prepare("
                 UPDATE tenants 
                 SET name = ?, email = ?, phone = ?, address = ? 
@@ -38,12 +42,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$name, $email, $phone, $address, $tenant_id]);
 
+            // 2. Update tabel tenant_settings (Gunakan UPSERT agar aman jika belum ada barisnya)
+            $stmtSet = $pdo->prepare("
+                INSERT INTO tenant_settings (tenant_id, attendance_method) 
+                VALUES (?, ?) 
+                ON DUPLICATE KEY UPDATE attendance_method = VALUES(attendance_method)
+            ");
+            $stmtSet->execute([$tenant_id, $attendance_method]);
+
+            $pdo->commit();
+
             // Perbarui session nama tenant agar langsung berubah di UI Header
             $_SESSION['tenant_name'] = $name;
 
-            $toast_msg = "Profil Perusahaan berhasil diperbarui!";
+            $toast_msg = "Profil dan Pengaturan Perusahaan berhasil diperbarui!";
             $toast_type = "success";
         } catch (Exception $e) {
+            $pdo->rollBack();
             $toast_msg = "Kesalahan sistem: " . $e->getMessage();
             $toast_type = "error";
         }
@@ -51,10 +66,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ==========================================
-// AMBIL DATA PERUSAHAAN (TENANT) TERBARU
+// AMBIL DATA PERUSAHAAN & SETTING TERBARU
 // ==========================================
 try {
-    $stmtTenant = $pdo->prepare("SELECT * FROM tenants WHERE id = ?");
+    $stmtTenant = $pdo->prepare("
+        SELECT t.*, ts.attendance_method 
+        FROM tenants t 
+        LEFT JOIN tenant_settings ts ON t.id = ts.tenant_id 
+        WHERE t.id = ?
+    ");
     $stmtTenant->execute([$tenant_id]);
     $tenantData = $stmtTenant->fetch(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
@@ -91,12 +111,12 @@ require_once __DIR__ . '/components/sidebar.php';
             <!-- Judul & Back Button -->
             <div class="flex items-center gap-3 px-1 mb-6">
                 <!-- Kembali diarahkan ke menu -->
-                <!-- <a href="<?= ($base_url ?? '') ?>/menu" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
+                <a href="<?= ($base_url ?? '') ?>/menu" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
-                </a> -->
+                </a>
                 <div>
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight leading-tight">Profil Perusahaan</h2>
-                    <p class="text-[11px] text-gray-500">Ubah informasi dasar dan kontak organisasi Anda.</p>
+                    <p class="text-[11px] text-gray-500">Ubah informasi dasar dan pengaturan absensi organisasi Anda.</p>
                 </div>
             </div>
 
@@ -123,6 +143,29 @@ require_once __DIR__ . '/components/sidebar.php';
                         <div>
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Alamat Lengkap Perusahaan</label>
                             <textarea name="address" rows="3" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800 resize-none" placeholder="Tuliskan alamat lengkap..."><?= htmlspecialchars($_POST['address'] ?? $tenantData['address'] ?? '') ?></textarea>
+                        </div>
+                        
+                        <hr class="border-gray-100 my-4">
+
+                        <!-- SETTING METODE ABSENSI -->
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Metode Absensi Karyawan</label>
+                            <div class="relative">
+                                <?php $currentMethod = $_POST['attendance_method'] ?? $tenantData['attendance_method'] ?? 'geo_face'; ?>
+                                <select name="attendance_method" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800 appearance-none">
+                                    <option value="geo_face" <?= ($currentMethod == 'geo_face') ? 'selected' : '' ?>>GPS Radius + Wajah AI (Otomatis)</option>
+                                    <option value="geo_only" <?= ($currentMethod == 'geo_only') ? 'selected' : '' ?>>GPS Radius Saja (Tanpa Kamera)</option>
+                                    <option value="anywhere_gps" <?= ($currentMethod == 'anywhere_gps') ? 'selected' : '' ?>>GPS Bebas / WFA (Tanpa Kamera)</option>
+                                    <option value="face_only" <?= ($currentMethod == 'face_only') ? 'selected' : '' ?>>Wajah AI Saja (Tanpa GPS)</option>
+                                    <option value="geo_selfie" <?= ($currentMethod == 'geo_selfie') ? 'selected' : '' ?>>GPS Radius + Foto Selfie</option>
+                                    <option value="selfie_only" <?= ($currentMethod == 'selfie_only') ? 'selected' : '' ?>>Foto Selfie Saja (Tanpa GPS)</option>
+                                    <option value="geo_photo" <?= ($currentMethod == 'geo_photo') ? 'selected' : '' ?>>GPS Radius + Foto Kamera Belakang</option>
+                                    <option value="photo_only" <?= ($currentMethod == 'photo_only') ? 'selected' : '' ?>>Foto Kamera Belakang Saja (Tanpa GPS)</option>
+                                    <option value="tap_only" <?= ($currentMethod == 'tap_only') ? 'selected' : '' ?>>Tap Saja (Tanpa Kamera & GPS)</option>
+                                </select>
+                                <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                            </div>
+                            <p class="text-[9px] text-gray-400 mt-1.5 leading-relaxed">Pilih metode validasi yang akan diaplikasikan ke seluruh karyawan pada aplikasi absensi.</p>
                         </div>
 
                     </div>
