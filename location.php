@@ -93,15 +93,6 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
 }
 // ==============================================================================
 
-// Menangkap Pesan Toast Global
-$toast_msg = '';
-$toast_type = '';
-if (isset($_SESSION['toast_msg'])) {
-    $toast_msg = $_SESSION['toast_msg'];
-    $toast_type = $_SESSION['toast_type'] ?? 'info';
-    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
-}
-
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
@@ -123,11 +114,6 @@ require_once __DIR__ . '/components/sidebar.php';
     <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6">
         
         <?php require_once __DIR__ . '/components/header.php'; ?>
-
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
-        </div>
 
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
@@ -281,39 +267,11 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
+<!-- Komponen Toast Global (Menangkap Session) -->
+<?php require_once __DIR__ . '/components/toast.php'; ?>
+
 <script>
     lucide.createIcons();
-
-    // ==========================================
-    // TOAST NOTIFICATION SYSTEM
-    // ==========================================
-    window.showToast = function(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
-
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
-        }
-        lucide.createIcons();
-
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-    }
-
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) window.showToast(phpMsg, phpType);
 
     // ==========================================
     // LOKAL SEARCH JS (Tanpa Loading/AJAX)
@@ -339,7 +297,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     window.detectLocation = function(btn) {
         if (!navigator.geolocation) {
-            window.showToast("Browser Anda tidak mendukung deteksi lokasi.", "error");
+            if(typeof window.showToast === 'function') window.showToast("Browser Anda tidak mendukung deteksi lokasi.", "error");
             return;
         }
 
@@ -370,7 +328,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 }, 2500);
             },
             function(error) {
-                window.showToast("Gagal mengambil lokasi. Pastikan GPS aktif dan izin diberikan.", "error");
+                if(typeof window.showToast === 'function') window.showToast("Gagal mengambil lokasi. Pastikan GPS aktif dan izin diberikan.", "error");
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
                 lucide.createIcons();
@@ -526,13 +484,13 @@ require_once __DIR__ . '/components/sidebar.php';
                         if (data.status === 'success') {
                             window.location.reload();
                         } else {
-                            window.showToast(data.message || 'Terjadi kesalahan sistem', 'error');
+                            if(typeof window.showToast === 'function') window.showToast(data.message || 'Terjadi kesalahan sistem', 'error');
                             btn.innerHTML = 'Coba Lagi';
                             btn.disabled = false;
                         }
                     })
                     .catch(() => {
-                        window.showToast('Gagal terhubung ke server', 'error');
+                        if(typeof window.showToast === 'function') window.showToast('Gagal terhubung ke server', 'error');
                         btn.innerHTML = 'Coba Lagi';
                         btn.disabled = false;
                     });
@@ -540,7 +498,7 @@ require_once __DIR__ . '/components/sidebar.php';
         }
     }
 
-    window.closeCrud = function() {
+    function closeCrud() {
         crudOverlay.classList.add('opacity-0');
         
         // Tutup Animasi Mobile

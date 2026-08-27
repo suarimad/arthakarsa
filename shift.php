@@ -25,22 +25,15 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
         if ($_SERVER['REQUEST_METHOD'] === 'GET' && $_GET['ajax_action'] === 'view') {
             $id = $_GET['shift_id'];
             
-            // Hitung total user & posisi
-            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users, COUNT(DISTINCT position_id) as total_positions FROM users WHERE shift_id = ? AND tenant_id = ?");
+            // Hitung total karyawan di shift ini
+            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users FROM users WHERE shift_id = ? AND tenant_id = ? AND deleted_at IS NULL");
             $stmt->execute([$id, $tenant_id]);
-            $res1 = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            // Hitung total departemen
-            $stmt2 = $pdo->prepare("SELECT COUNT(DISTINCT p.department_id) as total_deps FROM users u JOIN positions p ON u.position_id = p.id WHERE u.shift_id = ? AND u.tenant_id = ?");
-            $stmt2->execute([$id, $tenant_id]);
-            $res2 = $stmt2->fetch(PDO::FETCH_ASSOC);
+            $res = $stmt->fetch(PDO::FETCH_ASSOC);
 
             echo json_encode([
                 'status' => 'success',
                 'data' => [
-                    'users' => $res1['total_users'] ?? 0,
-                    'positions' => $res1['total_positions'] ?? 0,
-                    'departments' => $res2['total_deps'] ?? 0
+                    'users' => $res['total_users'] ?? 0
                 ]
             ]);
             exit;
@@ -80,6 +73,8 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
         // --- 4. DELETE DATA (POST) ---
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['ajax_action'] === 'delete') {
             $id = $_POST['shift_id'];
+            
+            // Menggunakan Soft Delete (Tabel shifts umumnya memiliki deleted_at)
             $stmt = $pdo->prepare("UPDATE shifts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $tenant_id]);
             
@@ -95,15 +90,6 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
     }
 }
 // ==============================================================================
-
-// Menangkap Pesan Toast Global
-$toast_msg = '';
-$toast_type = '';
-if (isset($_SESSION['toast_msg'])) {
-    $toast_msg = $_SESSION['toast_msg'];
-    $toast_type = $_SESSION['toast_type'] ?? 'info';
-    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
-}
 
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
@@ -127,17 +113,12 @@ require_once __DIR__ . '/components/sidebar.php';
         
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
-        </div>
-
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
             <div class="flex justify-between items-center px-1">
                 <div>
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Manajemen Shift</h2>
-                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola jam kerja karyawan Anda</p>
+                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola jam kerja dan jadwal karyawan</p>
                 </div>
                 
                 <!-- TOMBOL TAMBAH AJAX -->
@@ -164,9 +145,9 @@ require_once __DIR__ . '/components/sidebar.php';
                         <!-- Kontainer List Shift -->
                         <div id="shiftListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0">
                             <?php foreach($shifts as $shift): 
-                                $start_formatted = date('H:i', strtotime($shift['start']));
-                                $end_formatted = date('H:i', strtotime($shift['end']));
                                 $safe_name = htmlspecialchars($shift['name'], ENT_QUOTES);
+                                $start_time = date('H:i', strtotime($shift['start']));
+                                $end_time = date('H:i', strtotime($shift['end']));
                             ?>
                                 <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col gap-3 transition hover:border-gray-200 group shift-card relative z-0" data-name="<?= strtolower($safe_name) ?>">
                                     
@@ -177,29 +158,19 @@ require_once __DIR__ . '/components/sidebar.php';
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors"><?= $safe_name ?></h4>
-                                            <p class="text-[11px] text-gray-500 font-medium truncate mt-0.5">Jadwal Kerja</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Waktu Shift -->
-                                    <div class="bg-gray-50 rounded-lg p-2.5 flex items-center justify-between mt-1 border border-gray-100/50">
-                                        <div class="flex items-center gap-2 text-gray-700">
-                                            <i data-lucide="log-in" class="w-3.5 h-3.5 text-success"></i>
-                                            <span class="text-xs font-bold"><?= $start_formatted ?></span>
-                                        </div>
-                                        <span class="text-gray-300 text-[10px] font-bold">s/d</span>
-                                        <div class="flex items-center gap-2 text-gray-700">
-                                            <i data-lucide="log-out" class="w-3.5 h-3.5 text-failed"></i>
-                                            <span class="text-xs font-bold"><?= $end_formatted ?></span>
+                                            <div class="flex items-center gap-1.5 mt-0.5">
+                                                <i data-lucide="calendar" class="w-3 h-3 text-gray-400"></i>
+                                                <p class="text-[11px] text-gray-500 font-medium truncate"><?= $start_time ?> - <?= $end_time ?> WIB</p>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <!-- Aksi CRUD AJAX -->
-                                    <div class="flex gap-1.5 mt-1">
+                                    <div class="flex gap-1.5 mt-2">
                                         <button onclick="openCrud('view', <?= $shift['id'] ?>, '<?= $safe_name ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-success/10 hover:text-success transition">
                                             <i data-lucide="eye" class="w-3.5 h-3.5"></i> Lihat
                                         </button>
-                                        <button onclick="openCrud('edit', <?= $shift['id'] ?>, '<?= $safe_name ?>', '<?= $start_formatted ?>', '<?= $end_formatted ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-primary/10 hover:text-primary transition">
+                                        <button onclick="openCrud('edit', <?= $shift['id'] ?>, '<?= $safe_name ?>', '<?= $start_time ?>', '<?= $end_time ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-primary/10 hover:text-primary transition">
                                             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit
                                         </button>
                                         <button onclick="openCrud('delete', <?= $shift['id'] ?>, '<?= $safe_name ?>')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-failed/10 hover:text-failed transition">
@@ -213,10 +184,10 @@ require_once __DIR__ . '/components/sidebar.php';
                             <?php if(empty($shifts)): ?>
                                 <div class="col-span-full bg-surface border border-dashed border-gray-200 rounded-2xl p-8 text-center">
                                     <div class="w-12 h-12 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <i data-lucide="calendar-clock" class="w-6 h-6"></i>
+                                        <i data-lucide="clock" class="w-6 h-6"></i>
                                     </div>
-                                    <h4 class="text-sm font-bold text-gray-800">Belum ada data shift</h4>
-                                    <p class="text-xs text-gray-500 mt-1 max-w-xs mx-auto">Klik tombol tambah di atas untuk membuat jadwal kerja pertama Anda.</p>
+                                    <h4 class="text-sm font-bold text-gray-800">Belum ada shift</h4>
+                                    <p class="text-xs text-gray-500 mt-1 max-w-xs mx-auto">Klik tombol tambah di atas untuk membuat jadwal shift Anda.</p>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -233,7 +204,7 @@ require_once __DIR__ . '/components/sidebar.php';
     <!-- Overlay -->
     <div id="crudOverlay" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
-    <!-- Modal Container: flex items-end (mobile) md:items-center (desktop) -->
+    <!-- Modal Container -->
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
         <!-- Content Card -->
         <div id="crudCard" class="bg-surface w-full max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh]">
@@ -287,39 +258,11 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
+<!-- Komponen Toast Global (Menangkap Session) -->
+<?php require_once __DIR__ . '/components/toast.php'; ?>
+
 <script>
     lucide.createIcons();
-
-    // ==========================================
-    // TOAST NOTIFICATION SYSTEM
-    // ==========================================
-    function showToast(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
-
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
-        }
-        lucide.createIcons();
-
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-    }
-
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) showToast(phpMsg, phpType);
 
     // ==========================================
     // LOKAL SEARCH JS (Tanpa Loading/AJAX)
@@ -330,8 +273,8 @@ require_once __DIR__ . '/components/sidebar.php';
         searchInput.addEventListener('input', function() {
             const q = this.value.toLowerCase();
             shiftCards.forEach(card => {
-                const shiftName = card.getAttribute('data-name');
-                if (shiftName.includes(q)) {
+                const name = card.getAttribute('data-name');
+                if (name.includes(q)) {
                     card.style.display = 'flex';
                 } else {
                     card.style.display = 'none';
@@ -355,7 +298,7 @@ require_once __DIR__ . '/components/sidebar.php';
         // 1. Generate HTML berdasarkan aksi
         let html = '';
         if (action === 'add' || action === 'edit') {
-            const title = action === 'add' ? 'Tambah Shift Baru' : 'Edit Data Shift';
+            const title = action === 'add' ? 'Tambah Shift' : 'Edit Shift';
             html = `
                 <h3 class="text-base font-bold text-gray-800 mb-6 text-center">${title}</h3>
                 <form id="ajaxCrudForm">
@@ -365,19 +308,21 @@ require_once __DIR__ . '/components/sidebar.php';
                     <div class="space-y-4">
                         <div>
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nama Shift</label>
-                            <input type="text" name="name" value="${name}" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
+                            <input type="text" name="name" value="${name}" required placeholder="Misal: Shift Pagi" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
                         </div>
+                        
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Jam Mulai</label>
+                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Jam Masuk (Start)</label>
                                 <input type="time" name="start" value="${start}" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
                             </div>
                             <div>
-                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Jam Selesai</label>
+                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Jam Pulang (End)</label>
                                 <input type="time" name="end" value="${end}" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-primary focus:outline-none transition">
                             </div>
                         </div>
                     </div>
+                    
                     <button type="submit" id="btnSubmitCrud" class="w-full bg-primary text-surface py-3 rounded-xl text-sm font-semibold mt-8 flex justify-center items-center gap-2 hover:opacity-90 transition">
                         <i data-lucide="save" class="w-4 h-4"></i> Simpan Data
                     </button>
@@ -391,7 +336,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         <i data-lucide="trash-2" class="w-6 h-6"></i>
                     </div>
                     <h3 class="text-base font-bold text-gray-800 mb-2">Hapus Shift?</h3>
-                    <p class="text-xs text-gray-500 mb-6">Apakah Anda yakin ingin menghapus jadwal <b>${name}</b>? Karyawan yang menggunakan shift ini akan kehilangan jadwalnya.</p>
+                    <p class="text-xs text-gray-500 mb-6">Apakah Anda yakin ingin menghapus shift <b>${name}</b>? Data ini hanya akan disembunyikan (soft delete).</p>
                     <form id="ajaxCrudForm">
                         <input type="hidden" name="ajax_action" value="delete">
                         <input type="hidden" name="shift_id" value="${id}">
@@ -407,7 +352,7 @@ require_once __DIR__ . '/components/sidebar.php';
             html = `
                 <div class="text-center mb-6 mt-2 md:mt-0">
                     <div class="w-14 h-14 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-3">
-                        <i data-lucide="pie-chart" class="w-6 h-6"></i>
+                        <i data-lucide="clock" class="w-6 h-6"></i>
                     </div>
                     <h3 class="text-base font-bold text-gray-800">Statistik Shift</h3>
                     <p class="text-xs text-primary font-medium mt-0.5">${name}</p>
@@ -421,23 +366,9 @@ require_once __DIR__ . '/components/sidebar.php';
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                         <div class="flex items-center gap-3">
                             <i data-lucide="users" class="w-4 h-4 text-gray-400"></i>
-                            <span class="text-xs font-semibold text-gray-700">Total Karyawan</span>
+                            <span class="text-xs font-semibold text-gray-700">Karyawan yang di-Assign</span>
                         </div>
                         <span id="st-users" class="text-sm font-bold text-primary">0</span>
-                    </div>
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <div class="flex items-center gap-3">
-                            <i data-lucide="briefcase" class="w-4 h-4 text-gray-400"></i>
-                            <span class="text-xs font-semibold text-gray-700">Posisi/Jabatan</span>
-                        </div>
-                        <span id="st-positions" class="text-sm font-bold text-primary">0</span>
-                    </div>
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <div class="flex items-center gap-3">
-                            <i data-lucide="building-2" class="w-4 h-4 text-gray-400"></i>
-                            <span class="text-xs font-semibold text-gray-700">Departemen Terkait</span>
-                        </div>
-                        <span id="st-deps" class="text-sm font-bold text-primary">0</span>
                     </div>
                 </div>
                 <button onclick="closeCrud()" class="w-full mt-6 py-3 bg-gray-50 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition">Tutup</button>
@@ -450,8 +381,6 @@ require_once __DIR__ . '/components/sidebar.php';
                     document.getElementById('viewLoader').classList.add('hidden');
                     document.getElementById('viewStats').classList.remove('hidden');
                     document.getElementById('st-users').innerText = data.data.users;
-                    document.getElementById('st-positions').innerText = data.data.positions;
-                    document.getElementById('st-deps').innerText = data.data.departments;
                 });
         }
 
@@ -489,13 +418,13 @@ require_once __DIR__ . '/components/sidebar.php';
                         if (data.status === 'success') {
                             window.location.reload();
                         } else {
-                            showToast(data.message || 'Terjadi kesalahan sistem', 'error');
+                            if(typeof window.showToast === 'function') window.showToast(data.message || 'Terjadi kesalahan sistem', 'error');
                             btn.innerHTML = 'Coba Lagi';
                             btn.disabled = false;
                         }
                     })
                     .catch(() => {
-                        showToast('Gagal terhubung ke server', 'error');
+                        if(typeof window.showToast === 'function') window.showToast('Gagal terhubung ke server', 'error');
                         btn.innerHTML = 'Coba Lagi';
                         btn.disabled = false;
                     });

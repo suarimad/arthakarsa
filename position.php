@@ -26,7 +26,7 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
             $id = $_GET['position_id'];
             
             // Hitung total karyawan di posisi ini
-            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users FROM users WHERE position_id = ? AND tenant_id = ?");
+            $stmt = $pdo->prepare("SELECT COUNT(id) as total_users FROM users WHERE position_id = ? AND tenant_id = ? AND deleted_at IS NULL");
             $stmt->execute([$id, $tenant_id]);
             $res = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -68,15 +68,21 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
             exit;
         }
 
-        // --- 4. DELETE DATA (POST) ---
+        // --- 4. DELETE DATA (POST - SOFT DELETE) ---
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['ajax_action'] === 'delete') {
             $id = $_POST['position_id'];
             
-            // Karena tabel positions tidak punya deleted_at, kita hapus permanen (Hard Delete)
-            // FK ON DELETE SET NULL di tabel users akan otomatis membuat user kehilangan posisi ini dengan aman
-            $stmt = $pdo->prepare("DELETE FROM positions WHERE id = ? AND tenant_id = ?");
+            // Menggunakan Soft Delete (update deleted_at) dan set position_id user ke NULL
+            $pdo->beginTransaction();
+            
+            $stmtUserUpdate = $pdo->prepare("UPDATE users SET position_id = NULL WHERE position_id = ? AND tenant_id = ?");
+            $stmtUserUpdate->execute([$id, $tenant_id]);
+
+            $stmt = $pdo->prepare("UPDATE positions SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $tenant_id]);
             
+            $pdo->commit();
+
             $_SESSION['toast_msg'] = "Posisi/Jabatan berhasil dihapus!";
             $_SESSION['toast_type'] = "success";
             echo json_encode(['status' => 'success']);
@@ -84,20 +90,12 @@ if (isset($_POST['ajax_action']) || isset($_GET['ajax_action'])) {
         }
         
     } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         exit;
     }
 }
 // ==============================================================================
-
-// Menangkap Pesan Toast Global
-$toast_msg = '';
-$toast_type = '';
-if (isset($_SESSION['toast_msg'])) {
-    $toast_msg = $_SESSION['toast_msg'];
-    $toast_type = $_SESSION['toast_type'] ?? 'info';
-    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
-}
 
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
@@ -114,12 +112,12 @@ foreach($all_departments as $d) {
     $deptOptionsHtml .= '<option value="'.$d['id'].'">'.htmlspecialchars($d['name'], ENT_QUOTES).'</option>';
 }
 
-// MENGAMBIL DATA POSISI UNTUK RENDER HALAMAN UTAMA (Beserta nama departemennya)
+// MENGAMBIL DATA POSISI UNTUK RENDER HALAMAN UTAMA (Hanya yang belum di-soft delete)
 $stmt = $pdo->prepare("
     SELECT p.*, d.name as department_name 
     FROM positions p 
     LEFT JOIN departments d ON p.department_id = d.id 
-    WHERE p.tenant_id = ? 
+    WHERE p.tenant_id = ? AND p.deleted_at IS NULL 
     ORDER BY p.name ASC
 ");
 $stmt->execute([$tenant_id]);
@@ -133,11 +131,6 @@ require_once __DIR__ . '/components/sidebar.php';
     <main class="w-full bg-surface md:bg-transparent min-h-screen pb-24 md:pb-8 md:px-6">
         
         <?php require_once __DIR__ . '/components/header.php'; ?>
-
-        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium">
-            <i id="toastIcon" class="w-4 h-4"></i>
-            <span id="toastMsg"></span>
-        </div>
 
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-2 relative z-0">
             
@@ -284,39 +277,11 @@ require_once __DIR__ . '/components/sidebar.php';
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
+<!-- Komponen Toast Global (Menangkap Session) -->
+<?php require_once __DIR__ . '/components/toast.php'; ?>
+
 <script>
     lucide.createIcons();
-
-    // ==========================================
-    // TOAST NOTIFICATION SYSTEM
-    // ==========================================
-    function showToast(msg, type) {
-        const toast = document.getElementById('toast');
-        const msgEl = document.getElementById('toastMsg');
-        const iconEl = document.getElementById('toastIcon');
-
-        msgEl.textContent = msg;
-        toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 -translate-y-full flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium';
-
-        if (type === 'failed' || type === 'error') {
-            toast.classList.add('bg-failed/10', 'text-failed', 'border-failed/20');
-            iconEl.setAttribute('data-lucide', 'alert-circle');
-        } else if (type === 'warning') {
-            toast.classList.add('bg-pending/10', 'text-pending', 'border-pending/20');
-            iconEl.setAttribute('data-lucide', 'alert-triangle');
-        } else {
-            toast.classList.add('bg-success/10', 'text-success', 'border-success/20');
-            iconEl.setAttribute('data-lucide', 'check-circle');
-        }
-        lucide.createIcons();
-
-        setTimeout(() => toast.classList.remove('opacity-0', '-translate-y-full'), 100);
-        setTimeout(() => toast.classList.add('opacity-0', '-translate-y-full'), 4000);
-    }
-
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg) showToast(phpMsg, phpType);
 
     // ==========================================
     // LOKAL SEARCH JS (Tanpa Loading/AJAX)
@@ -397,7 +362,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         <i data-lucide="trash-2" class="w-6 h-6"></i>
                     </div>
                     <h3 class="text-base font-bold text-gray-800 mb-2">Hapus Posisi?</h3>
-                    <p class="text-xs text-gray-500 mb-6">Apakah Anda yakin ingin menghapus posisi <b>${name}</b> secara permanen? Data karyawan yang memakai posisi ini akan menjadi tanpa jabatan.</p>
+                    <p class="text-xs text-gray-500 mb-6">Apakah Anda yakin ingin menghapus posisi <b>${name}</b>? Data ini hanya akan disembunyikan (soft delete).</p>
                     <form id="ajaxCrudForm">
                         <input type="hidden" name="ajax_action" value="delete">
                         <input type="hidden" name="position_id" value="${id}">
@@ -479,13 +444,13 @@ require_once __DIR__ . '/components/sidebar.php';
                         if (data.status === 'success') {
                             window.location.reload();
                         } else {
-                            showToast(data.message || 'Terjadi kesalahan sistem', 'error');
+                            if(typeof window.showToast === 'function') window.showToast(data.message || 'Terjadi kesalahan sistem', 'error');
                             btn.innerHTML = 'Coba Lagi';
                             btn.disabled = false;
                         }
                     })
                     .catch(() => {
-                        showToast('Gagal terhubung ke server', 'error');
+                        if(typeof window.showToast === 'function') window.showToast('Gagal terhubung ke server', 'error');
                         btn.innerHTML = 'Coba Lagi';
                         btn.disabled = false;
                     });

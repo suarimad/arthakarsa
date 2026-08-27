@@ -9,7 +9,7 @@ $manifest = [
     "start_url" => $base_url . "/",
     "display" => "standalone",
     "background_color" => "#f3f4f6", // Warna background dari warna 'background' tailwind
-    "theme_color" => $app_settings['theme_color'],
+    "theme_color" => "#ffffff", // Mengubah warna PWA window shell
     "orientation" => "portrait-primary",
     "icons" => [
         [

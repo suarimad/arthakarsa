@@ -10,8 +10,8 @@
     <!-- Meta Data Dinamis -->
     <title><?= htmlspecialchars($app_settings['app_name'] ?? 'HRIS Pro') ?> - <?= htmlspecialchars($app_settings['slogan'] ?? '') ?></title>
     <meta name="description" content="<?= htmlspecialchars($app_settings['description'] ?? '') ?>">
-    <meta name="theme-color" content="<?= htmlspecialchars($app_settings['theme_color'] ?? '#ea3800') ?>">
-    
+    <!-- <meta name="theme-color" content="<?= htmlspecialchars($app_settings['theme_color'] ?? '#ea3800') ?>"> -->
+    <meta name="theme-color" content="#ffffff">
     <!-- PWA & Favicon Dinamis -->
     <link rel="manifest" href="<?= $base_url ?>/manifest.php">
     <link rel="icon" type="image/png" href="<?= $logo_path . ($app_settings['favicon'] ?? 'default_favicon.png') ?>">

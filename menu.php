@@ -29,82 +29,83 @@ require_once __DIR__ . '/components/sidebar.php';
         <?php require_once __DIR__ . '/components/header.php'; ?>
 
         <!-- PAGE CONTENT -->
-        <div class="px-5 md:px-0 space-y-6 mt-2 relative z-0">
+        <div class="px-5 md:px-0 space-y-8 mt-2 relative z-0">
             
             <!-- ============================================== -->
             <!-- SECTION 1: MENU UMUM (EKSPLORASI FITUR) -->
             <!-- ============================================== -->
             <div>
-                <div class="flex justify-between items-center px-1 mb-3">
+                <!-- Padding disamakan dengan padding dalam card agar sejajar rata kiri -->
+                <div class="flex justify-between items-center px-2 md:px-8 mb-4">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Eksplorasi Fitur</h2>
                 </div>
 
-                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
+                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-2 md:p-8">
                     <!-- Grid 4 kolom di mobile, 6 di tablet, 8 di desktop -->
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
                         <!-- 1. Izin -->
-                        <a href="leave" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="calendar-off" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="leave" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="calendar-off" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Izin</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-violet-600 transition-colors">Izin</span>
                         </a>
 
                         <!-- 2. Lembur -->
-                        <a href="overtime" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="clock-4" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="overtime" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="clock-4" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Lembur</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Lembur</span>
                         </a>
 
                         <!-- 3. Reimburse -->
-                        <a href="reimbursement" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="receipt" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="reimbursement" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="receipt" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Reimburse</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-emerald-600 transition-colors">Reimburse</span>
                         </a>
 
                         <!-- 4. Log Absensi -->
-                        <a href="attendance" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="clipboard-list" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="attendance" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="clipboard-list" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Log<br>Absensi</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Log<br>Absensi</span>
                         </a>
 
                         <!-- 5. Slip Gaji -->
-                        <a href="payslip" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="banknote" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="payslip" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="banknote" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Slip<br>Gaji</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-teal-600 transition-colors">Slip<br>Gaji</span>
                         </a>
 
                         <!-- 6. Kalender -->
-                        <a href="calendar" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="calendar-days" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="calendar" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="calendar-days" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Kalender</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-indigo-600 transition-colors">Kalender</span>
                         </a>
 
                         <!-- 7. Review -->
-                        <a href="review" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="star" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="review" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="star" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Review</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-amber-600 transition-colors">Review</span>
                         </a>
 
                         <!-- 8. Proyek -->
-                        <a href="project" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="briefcase" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="project" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="briefcase" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Proyek</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-rose-600 transition-colors">Proyek</span>
                         </a>
 
                     </div>
@@ -116,68 +117,67 @@ require_once __DIR__ . '/components/sidebar.php';
             <!-- ============================================== -->
             <?php if (in_array($role_name_session, ['admin', 'superadmin'])): ?>
             <div>
-                <div class="flex justify-between items-center px-1 mb-3">
+                <div class="flex justify-between items-center px-2 md:px-8 mb-4">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Admin Menu</h2>
                 </div>
 
-                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
+                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-2 md:p-8">
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="setting_company" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="building" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="setting_company" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="building" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Perusahaan</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Perusahaan</span>
                         </a>
 
-                        <a href="setting_app" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="settings" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="setting_app" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center group-hover:bg-slate-200 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="settings" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Aplikasi</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-slate-800 transition-colors">Aplikasi</span>
                         </a>
 
-                        <a href="department" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="network" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="department" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:bg-pink-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="network" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Department</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-pink-600 transition-colors">Department</span>
                         </a>
 
-                        <a href="position" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="user-cog" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="position" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="user-cog" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Posisi</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Posisi</span>
                         </a>
 
-                        <a href="location" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="map-pin" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="location" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="map-pin" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Lokasi</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-red-600 transition-colors">Lokasi</span>
                         </a>
 
-                        <!-- Placeholder Tambahan -->
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="clock" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center group-hover:bg-cyan-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="clock" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Data Shift</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-cyan-600 transition-colors">Data Shift</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="shield" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="shield" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Role Akses</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-indigo-600 transition-colors">Role Akses</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="server" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center group-hover:bg-slate-200 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="server" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Tenant DB</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-slate-800 transition-colors">Tenant DB</span>
                         </a>
 
                     </div>
@@ -190,40 +190,39 @@ require_once __DIR__ . '/components/sidebar.php';
             <!-- ============================================== -->
             <?php if ($role_name_session === 'hr'): ?>
             <div>
-                <div class="flex justify-between items-center px-1 mb-3">
+                <div class="flex justify-between items-center px-2 md:px-8 mb-4">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">HR Menu</h2>
                 </div>
 
-                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
+                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-2 md:p-8">
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="hr_payslip" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="file-text" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="hr_payslip" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="file-text" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Slip Gaji</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-teal-600 transition-colors">Slip Gaji</span>
                         </a>
 
-                        <!-- Placeholder Tambahan -->
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="file-spreadsheet" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="file-spreadsheet" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Rekap<br>Absensi</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Rekap<br>Absensi</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="check-square" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="check-square" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Approval<br>Cuti</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-violet-600 transition-colors">Approval<br>Cuti</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="hand-coins" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="hand-coins" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Kasbon<br>Karyawan</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-emerald-600 transition-colors">Kasbon<br>Karyawan</span>
                         </a>
 
                     </div>
@@ -236,40 +235,39 @@ require_once __DIR__ . '/components/sidebar.php';
             <!-- ============================================== -->
             <?php if ($role_name_session === 'manager'): ?>
             <div>
-                <div class="flex justify-between items-center px-1 mb-3">
+                <div class="flex justify-between items-center px-2 md:px-8 mb-4">
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Manager Menu</h2>
                 </div>
 
-                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-6 md:p-8">
+                <div class="bg-surface md:border border-gray-100 rounded-3xl md:shadow-sm p-2 md:p-8">
                     <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-7 gap-x-2 md:gap-x-6">
                         
-                        <a href="review" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="star-half" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="review" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="star-half" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Employee<br>Review</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-amber-600 transition-colors">Employee<br>Review</span>
                         </a>
 
-                        <!-- Placeholder Tambahan -->
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="check-circle" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="check-circle" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Approval<br>Tim</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Approval<br>Tim</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="pie-chart" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="pie-chart" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Laporan<br>Proyek</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-rose-600 transition-colors">Laporan<br>Proyek</span>
                         </a>
 
-                        <a href="#" class="flex flex-col items-center gap-2.5 group">
-                            <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 text-gray-600 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm group-hover:scale-105">
-                                <i data-lucide="timer" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        <a href="#" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="timer" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
-                            <span class="text-[10px] md:text-xs font-semibold text-gray-600 text-center leading-tight group-hover:text-primary transition-colors">Timesheet<br>Tim</span>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Timesheet<br>Tim</span>
                         </a>
 
                     </div>

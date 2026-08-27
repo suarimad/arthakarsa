@@ -37,15 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 }
 // ==========================================
 
-// Tangkap session toast
-$toast_msg = '';
-$toast_type = '';
-if (isset($_SESSION['toast_msg'])) {
-    $toast_msg = $_SESSION['toast_msg'];
-    $toast_type = $_SESSION['toast_type'] ?? 'info';
-    unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
-}
-
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
@@ -104,10 +95,15 @@ foreach ($all_employees as $emp) {
 
 // 2. QUERY DINAMIS: KARYAWAN YANG TIDAK MASUK HARI INI (SATU DEPARTEMEN)
 $today_date = date('Y-m-d');
+// Query disesuaikan agar mengambil data lengkap untuk modal
 $sql_absent = "
-    SELECT u.id, u.name, u.avatar 
+    SELECT u.id, u.uuid, u.name, u.email, u.whatsapp, u.avatar, 
+           r.name as role_name, r.display_name as role_display, 
+           p.name as position_name, d.name as department_name 
     FROM users u 
     LEFT JOIN positions p ON u.position_id = p.id
+    LEFT JOIN departments d ON p.department_id = d.id
+    LEFT JOIN roles r ON u.role_id = r.id
     WHERE u.tenant_id = ? 
       AND u.deleted_at IS NULL 
       AND u.id != ? 
@@ -179,12 +175,25 @@ require_once __DIR__ . '/components/sidebar.php';
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
                     <?php foreach($absentEmployees as $absent): 
                         $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($absent['name']);
+                        $abs_position = htmlspecialchars($absent['position_name'] ?? $absent['role_display'] ?? ucfirst($absent['role_name'] ?? 'Employee'));
+                        $abs_department = htmlspecialchars($absent['department_name'] ?? 'Belum ada departemen');
                     ?>
-                    <div class="flex flex-col items-center gap-1.5 shrink-0 w-16">
-                        <div class="w-14 h-14 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white">
+                    <!-- Element yang bisa di-klik untuk membuka Modal -->
+                    <div class="flex flex-col items-center gap-1.5 shrink-0 w-16 cursor-pointer group"
+                         onclick="openEmployeeDetail(this)"
+                         data-id="<?= $absent['id'] ?>"
+                         data-uuid="<?= htmlspecialchars($absent['uuid']) ?>"
+                         data-name="<?= htmlspecialchars($absent['name']) ?>"
+                         data-email="<?= htmlspecialchars($absent['email']) ?>"
+                         data-whatsapp="<?= htmlspecialchars($absent['whatsapp'] ?? '') ?>"
+                         data-avatar="<?= $abs_avatar ?>"
+                         data-position="<?= $abs_position ?>"
+                         data-department="<?= $abs_department ?>"
+                    >
+                        <div class="w-14 h-14 rounded-full border-[2.5px] border-failed p-0.5 relative bg-white group-hover:scale-105 transition-transform">
                             <img src="<?= $abs_avatar ?>" alt="Profile" class="w-full h-full rounded-full object-cover">
                         </div>
-                        <span class="text-[9px] font-medium text-gray-600 w-full text-center truncate"><?= explode(' ', htmlspecialchars($absent['name']))[0] ?></span>
+                        <span class="text-[9px] font-medium text-gray-600 w-full text-center truncate group-hover:text-primary transition-colors"><?= explode(' ', htmlspecialchars($absent['name']))[0] ?></span>
                     </div>
                     <?php endforeach; ?>
                 </div>
@@ -233,7 +242,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                 $emp_position = htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee'));
                                 $emp_department = htmlspecialchars($emp['department_name'] ?? 'Belum ada departemen');
                             ?>
-                                <!-- CARD KLIKABEL (Dengan Border Avatar Kustom) -->
+                                <!-- CARD KLIKABEL -->
                                 <div class="bg-surface border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-3.5 transition hover:border-gray-200 hover:shadow-md cursor-pointer relative z-0 group"
                                      onclick="openEmployeeDetail(this)"
                                      data-id="<?= $emp['id'] ?>"
@@ -355,7 +364,7 @@ require_once __DIR__ . '/components/sidebar.php';
     </div>
 </div>
 
-<?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
+<!-- Komponen Toast Global (Menangkap Session) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
@@ -438,11 +447,11 @@ require_once __DIR__ . '/components/sidebar.php';
                 if (data.status === 'success') {
                     window.location.reload();
                 } else {
-                    window.showToast(data.message, 'error');
+                    if(typeof window.showToast === 'function') window.showToast(data.message, 'error');
                 }
             })
             .catch(() => {
-                window.showToast('Gagal terhubung ke server', 'error');
+                if(typeof window.showToast === 'function') window.showToast('Gagal terhubung ke server', 'error');
             });
     }
 

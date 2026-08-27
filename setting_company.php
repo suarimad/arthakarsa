@@ -9,7 +9,7 @@ $role_name_session = strtolower($_SESSION['role'] ?? '');
 if (!in_array($role_id, [1, 2]) && !in_array($role_name_session, ['admin', 'superadmin'])) {
     $_SESSION['toast_msg'] = "Anda tidak memiliki akses ke halaman ini.";
     $_SESSION['toast_type'] = "failed";
-    header("Location: menu");
+    header("Location: .");
     exit;
 }
 
@@ -124,7 +124,7 @@ require_once __DIR__ . '/components/sidebar.php';
             <!-- Judul & Back Button -->
             <div class="flex items-center gap-3 px-1 mb-6">
                 <!-- Kembali diarahkan ke menu -->
-                <a href="<?= ($base_url ?? '') ?>/menu" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
+                <a href="<?= ($base_url ?? '') ?>/." class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
                 </a>
                 <div>
@@ -184,7 +184,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
 
                     <div class="mt-8 pt-6 border-t border-gray-100 flex gap-3">
-                        <a href="<?= ($base_url ?? '') ?>/menu" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
+                        <a href="<?= ($base_url ?? '') ?>/." class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
                             Batal
                         </a>
                         <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
