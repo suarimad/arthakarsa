@@ -12,6 +12,11 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
+// Identifikasi Superadmin / Role 1
+$session_role_id = $_SESSION['role_id'] ?? null;
+$session_role_name = strtolower($_SESSION['role'] ?? '');
+$is_superadmin = ($session_role_id == 1 || $session_role_name === 'superadmin');
+
 // ==========================================
 // 0. SETTING PENGATURAN & TIMEZONE TENANT
 // ==========================================
@@ -36,8 +41,10 @@ $time_now = date('Y-m-d H:i:s');
 $current_time_only = date('H:i:s');
 
 // ==========================================
-// PENANGANAN AJAX: SIMPAN DATA ABSENSI
+// PENANGANAN AJAX
 // ==========================================
+
+// --- A. SIMPAN DATA ABSENSI ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'attendance') {
     header('Content-Type: application/json');
     try {
@@ -45,11 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         $lat = $_POST['lat'] ?? null;
         $lng = $_POST['lng'] ?? null;
         $image_base64 = $_POST['image'] ?? '';
-        $method = $_POST['method'] ?? $attendance_method; // Simpan metodenya
+        $method = $_POST['method'] ?? $attendance_method; 
         $shift_start_db = $_POST['shift_start_db'] ?? '08:00:00';
         $shift_end_db = $_POST['shift_end_db'] ?? '17:00:00';
 
-        // 1. Simpan Foto Aktual dari Base64 ke Folder
+        // Simpan Foto Aktual dari Base64 ke Folder
         $image_name = null;
         if (!empty($image_base64) && preg_match('/^data:image\/(\w+);base64,/', $image_base64, $type_match)) {
             $data = substr($image_base64, strpos($image_base64, ',') + 1);
@@ -65,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         $stmtCheck->execute([$user_id, $date_today]);
         $todayAtt = $stmtCheck->fetch(PDO::FETCH_ASSOC);
 
-        // 2. Simpan ke Tabel attendances
         if ($type === 'in') {
             if ($todayAtt) {
                 echo json_encode(['status' => 'success', 'message' => 'Anda sudah absen masuk hari ini.']);
@@ -104,6 +110,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         echo json_encode(['status' => 'success']);
     } catch (Exception $e) {
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// --- B. HAPUS DATA ABSENSI (HANYA SUPERADMIN/ROLE 1) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'delete_attendance') {
+    header('Content-Type: application/json');
+    if ($is_superadmin) {
+        try {
+            $id = $_POST['id'];
+            $stmtDel = $pdo->prepare("DELETE FROM attendances WHERE id = ?");
+            $stmtDel->execute([$id]);
+            echo json_encode(['status' => 'success']);
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Unauthorized Action']);
     }
     exit;
 }
@@ -213,7 +237,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <?php endif; ?>
                             </div>
                             
-                            <!-- LOGIKA DISABLED BUTTONS (Termasuk Mode Tap Only) -->
+                            <!-- LOGIKA DISABLED BUTTONS -->
                             <div class="flex gap-3 md:w-2/3 lg:w-1/2">
                                 <?php if($has_clocked_in): ?>
                                     <button disabled class="flex-1 bg-white/20 text-white/80 text-sm font-semibold py-3 md:py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed">
@@ -291,7 +315,17 @@ require_once __DIR__ . '/components/sidebar.php';
                                             </div>
                                         </div>
                                     </div>
-                                    <span class="px-2 py-1 <?= $status_color ?> text-[9px] font-bold rounded-md"><?= $status_label ?></span>
+                                    
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-1 <?= $status_color ?> text-[9px] font-bold rounded-md"><?= $status_label ?></span>
+                                        
+                                        <!-- Tombol Hapus: Hanya Muncul untuk Role 1 atau Superadmin -->
+                                        <?php if($is_superadmin): ?>
+                                        <button onclick="deleteAttendance(<?= $att['id'] ?>); event.stopPropagation();" class="text-gray-400 hover:text-failed hover:bg-failed/10 transition p-1.5 rounded-md" title="Hapus Riwayat">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -353,13 +387,13 @@ require_once __DIR__ . '/components/sidebar.php';
     </div>
 </div>
 
-<!-- ================= MODAL ABSENSI DINAMIS (Compact & Full) ================= -->
+<!-- ================= MODAL ABSENSI DINAMIS ================= -->
 <div id="attendanceModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <div id="attendanceOverlay" onclick="closeAttendance()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
-        <!-- Card Container (Ukurannya akan menyesuaikan konten di dalamnya) -->
-        <div id="attendanceCard" class="bg-surface w-full max-w-sm rounded-3xl shadow-2xl transform scale-95 opacity-0 transition-all duration-300 pointer-events-auto relative overflow-hidden flex flex-col">
+        <!-- Card Container Responsive: Max-width menjadi 3xl (lebar) di desktop agar proporsi aspect-video pas -->
+        <div id="attendanceCard" class="bg-surface w-full max-w-sm md:max-w-3xl rounded-3xl shadow-2xl transform scale-95 opacity-0 transition-all duration-300 pointer-events-auto relative overflow-hidden flex flex-col">
             
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <div>
@@ -371,8 +405,8 @@ require_once __DIR__ . '/components/sidebar.php';
                 </button>
             </div>
 
-            <!-- UI 1: MODE KAMERA (Aspect 3/4 - Lebih Besar) -->
-            <div id="cameraUI" class="relative bg-black aspect-[3/4] w-full items-center justify-center overflow-hidden hidden">
+            <!-- UI 1: MODE KAMERA (Responsive aspect ratio) -->
+            <div id="cameraUI" class="relative bg-black aspect-[3/4] md:aspect-video w-full items-center justify-center overflow-hidden hidden">
                 <video id="cameraStream" autoplay playsinline class="w-full h-full object-cover"></video>
                 
                 <div class="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10 z-10">
@@ -385,19 +419,20 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
                 </div>
 
-                <div id="manualActionCamera" class="absolute inset-0 bg-black/40 flex items-center justify-center hidden z-20 backdrop-blur-sm">
-                    <button id="btnManualCamera" onclick="manualCaptureAndSubmit()" class="bg-primary text-surface px-6 py-3 rounded-2xl shadow-lg font-bold flex items-center gap-2 hover:scale-105 transition active:scale-95">
+                <!-- Tombol Manual Mengambang di atas status box (tidak ada backdrop hitam yang full layar) -->
+                <div id="manualActionCamera" class="absolute bottom-24 left-0 right-0 flex items-center justify-center hidden z-20">
+                    <button id="btnManualCamera" onclick="manualCaptureAndSubmit()" class="bg-primary text-surface px-6 py-3 rounded-2xl shadow-xl border border-white/20 font-bold flex items-center gap-2 hover:scale-105 transition active:scale-95">
                         <i data-lucide="camera" class="w-5 h-5"></i> Ambil Foto & Absen
                     </button>
                 </div>
             </div>
 
-            <!-- UI 2: MODE NON-KAMERA (Lebih Compact, Tanpa Video) -->
-            <div id="noCameraUI" class="relative bg-gray-50 w-full flex-col items-center justify-center overflow-hidden hidden p-6">
+            <!-- UI 2: MODE NON-KAMERA -->
+            <div id="noCameraUI" class="relative bg-gray-50 aspect-[3/4] md:aspect-video w-full flex-col items-center justify-center overflow-hidden hidden p-6">
                 <!-- Motif Latar Belakang -->
                 <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#ea3800 1px, transparent 1px); background-size: 20px 20px;"></div>
                 
-                <div class="relative z-10 flex flex-col items-center w-full">
+                <div class="relative z-10 flex flex-col items-center w-full max-w-sm mx-auto">
                     <div id="pinAnimation" class="relative w-20 h-20 flex items-center justify-center mb-6">
                          <div class="absolute inset-0 bg-primary/20 rounded-full animate-ping pulse-layer"></div>
                          <div class="relative w-16 h-16 bg-white text-primary rounded-full flex items-center justify-center shadow-md border border-gray-100 pin-bg">
@@ -440,7 +475,6 @@ require_once __DIR__ . '/components/sidebar.php';
         <div class="p-5 pb-8 md:max-w-md md:mx-auto">
             <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-5"></div>
             <h3 class="text-sm font-semibold text-gray-800 mb-5 text-center">Buat Pengajuan</h3>
-            <!-- (Isi Sheet Disingkat untuk Kerapihan) -->
             <div class="grid grid-cols-3 gap-4">
                 <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group"><div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center"><i data-lucide="calendar-off" class="w-5 h-5"></i></div><span class="text-[11px] font-medium text-gray-600">Leave</span></a>
                 <a href="#" class="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition group"><div class="w-12 h-12 bg-pending/10 text-pending rounded-full flex items-center justify-center"><i data-lucide="stethoscope" class="w-5 h-5"></i></div><span class="text-[11px] font-medium text-gray-600">Sick</span></a>
@@ -459,10 +493,35 @@ require_once __DIR__ . '/components/sidebar.php';
 <script>
     lucide.createIcons();
 
-    // PULL TO REFRESH LOGIC (Disembunyikan detailnya agar fokus)
+    // ==========================================
+    // HAPUS RIWAYAT ABSENSI VIA AJAX (SUPERADMIN)
+    // ==========================================
+    window.deleteAttendance = function(id) {
+        const formData = new FormData();
+        formData.append('ajax_action', 'delete_attendance');
+        formData.append('id', id);
+
+        fetch('', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    window.showToast(data.message, 'error');
+                }
+            })
+            .catch(() => {
+                window.showToast('Gagal menghapus data', 'error');
+            });
+    };
+
+    // ==========================================
+    // PULL TO REFRESH
+    // ==========================================
     const ptrContainer = document.getElementById('main-scroll-container');
     const ptrIndicator = document.getElementById('ptr-indicator');
     let startY = 0, currentY = 0, isPulling = false;
+
     if(ptrContainer && ptrIndicator) {
         ptrContainer.addEventListener('touchstart', (e) => { if(ptrContainer.scrollTop === 0) { startY = e.touches[0].clientY; isPulling = true; ptrIndicator.style.transition = 'none'; } }, {passive: true});
         ptrContainer.addEventListener('touchmove', (e) => { if(!isPulling) return; currentY = e.touches[0].clientY; let d = currentY - startY; if(d > 0 && ptrContainer.scrollTop === 0) { if(d>100) d = 100+(d-100)*0.2; ptrIndicator.style.height = `${d}px`; } else { isPulling = false; } }, {passive: true});
@@ -540,7 +599,6 @@ require_once __DIR__ . '/components/sidebar.php';
     // --- FUNGSI UTAMA TAP ONLY ---
     window.handleTapOnly = function(type) {
         isProcessing = true;
-        // Langsung kirim ajax ke server tanpa modal
         submitToServer('', type);
     }
 
@@ -603,9 +661,8 @@ require_once __DIR__ . '/components/sidebar.php';
             document.getElementById('noCameraUI').classList.add('hidden');
             document.getElementById('noCameraUI').classList.remove('flex');
             document.getElementById('manualActionCamera').classList.add('hidden');
-            document.getElementById('modalFooter').classList.remove('hidden'); // Disclaimer muncul
+            document.getElementById('modalFooter').classList.remove('hidden'); 
             
-            // Mirror efek hanya jika kamera menghadap ke muka (user)
             if(methodConfig.facing === 'user') {
                 video.classList.add('scale-x-[-1]');
             } else {
@@ -617,7 +674,7 @@ require_once __DIR__ . '/components/sidebar.php';
             document.getElementById('noCameraUI').classList.remove('hidden');
             document.getElementById('noCameraUI').classList.add('flex');
             document.getElementById('manualActionNoCamera').classList.add('hidden');
-            document.getElementById('modalFooter').classList.add('hidden'); // Sembunyikan footer di compact mode
+            document.getElementById('modalFooter').classList.add('hidden'); 
         }
         lucide.createIcons();
 
@@ -630,10 +687,8 @@ require_once __DIR__ . '/components/sidebar.php';
             attCard.classList.add('scale-100', 'opacity-100');
         }, 10);
 
-        // Nyalakan Kamera (Jika Perlu)
         if (methodConfig.camera) {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                // Gunakan environment (belakang) jika geo_photo, tapi fallback ke default jika di PC
                 const constraints = { video: { facingMode: methodConfig.facing ? { ideal: methodConfig.facing } : true } };
                 
                 navigator.mediaDevices.getUserMedia(constraints)
@@ -672,16 +727,15 @@ require_once __DIR__ . '/components/sidebar.php';
                                 if (distance > officeRadius) {
                                     const diff = distRounded - officeRadius;
                                     setStatus(`<span class="text-failed font-bold">Akses Ditolak</span><br>Anda berada di luar radius.<br>Jarak: <span class="text-failed">${distRounded}m</span> (Batas: ${officeRadius}m)`, 'failed');
-                                    return; // BERHENTI
+                                    return; 
                                 } else {
                                     setStatus(`<span class="text-success font-bold">Lokasi Valid</span><br>Jarak Anda: <span class="text-success">${distRounded}m</span> (Batas: ${officeRadius}m)`, 'success');
                                 }
                             } else {
                                 setStatus(`<span class="text-failed font-bold">Akses Ditolak</span><br>Lokasi kantor belum diatur.`, 'failed');
-                                return; // BERHENTI
+                                return; 
                             }
                         } else {
-                            // anywhere_gps
                             setStatus(`<span class="text-success font-bold">Lokasi Tercatat</span><br>Koordinat: ${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`, 'success');
                         }
                         setTimeout(() => proceedToValidation(), 1000);
@@ -749,7 +803,7 @@ require_once __DIR__ . '/components/sidebar.php';
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
-        if(methodConfig.facing === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); } // Mirror hanya jika selfie
+        if(methodConfig.facing === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); } 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         submitToServer(canvas.toDataURL('image/jpeg', 0.8), attType.value);
     }
@@ -779,7 +833,7 @@ require_once __DIR__ . '/components/sidebar.php';
         const formData = new FormData();
         formData.append('ajax_action', 'attendance');
         formData.append('type', overrideType || attType.value); 
-        formData.append('method', attendanceMethod); // Tambahkan method absensi ke DB
+        formData.append('method', attendanceMethod); 
         formData.append('lat', attLat.value || '0');
         formData.append('lng', attLng.value || '0');
         formData.append('image', base64Image);
