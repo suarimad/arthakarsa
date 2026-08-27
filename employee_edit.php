@@ -120,14 +120,14 @@ try {
     $stmtPos->execute([$tenant_id]);
     $positions = $stmtPos->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil data user yang bisa menjadi atasan + nama departemennya
+    // Ambil HANYA data user dengan role 'manager' + nama departemennya
     $stmtMgr = $pdo->prepare("
         SELECT u.id, u.name, p.department_id, d.name as department_name 
         FROM users u 
         LEFT JOIN positions p ON u.position_id = p.id 
         LEFT JOIN departments d ON p.department_id = d.id
         LEFT JOIN roles r ON u.role_id = r.id 
-        WHERE u.tenant_id = ? AND r.name IN ('manager', 'hr', 'admin', 'superadmin') AND u.deleted_at IS NULL AND u.id != ?
+        WHERE u.tenant_id = ? AND r.name = 'manager' AND u.deleted_at IS NULL AND u.id != ?
         ORDER BY u.name ASC
     ");
     $stmtMgr->execute([$tenant_id, $editUser['id']]);
