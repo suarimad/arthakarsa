@@ -13,3 +13,7 @@ Thumbs.db
 
 assets/img/attendances/*
 assets/img/avatars/*
+
+# ...KECUALI file .gitkeep agar kerangka foldernya tetap terbawa oleh Git
+!assets/img/attendances/.gitkeep
+!assets/img/avatars/.gitkeep
