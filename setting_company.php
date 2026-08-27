@@ -14,8 +14,6 @@ if (!in_array($role_id, [1, 2]) && !in_array($role_name_session, ['admin', 'supe
 }
 
 $tenant_id = $_SESSION['tenant_id'];
-$toast_msg = '';
-$toast_type = '';
 
 // ==========================================
 // PENANGANAN POST: UPDATE DATA PERUSAHAAN
@@ -28,8 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $attendance_method = $_POST['attendance_method'] ?? 'geo_face';
 
     if (empty($name)) {
-        $toast_msg = "Nama perusahaan wajib diisi!";
-        $toast_type = "warning";
+        $_SESSION['toast_msg'] = "Nama perusahaan wajib diisi!";
+        $_SESSION['toast_type'] = "warning";
     } else {
         try {
             $pdo->beginTransaction(); // Gunakan transaksi karena mengupdate 2 tabel
@@ -69,12 +67,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Perbarui session nama tenant agar langsung berubah di UI Header
             $_SESSION['tenant_name'] = $name;
 
-            $toast_msg = "Profil dan Pengaturan Perusahaan berhasil diperbarui!";
-            $toast_type = "success";
+            // Set notifikasi sukses ke Session (Akan dibaca otomatis oleh komponen toast.php)
+            $_SESSION['toast_msg'] = "Profil dan Pengaturan Perusahaan berhasil diperbarui!";
+            $_SESSION['toast_type'] = "success";
+            
+            // Redirect ke halaman saat ini untuk menghindari resubmission form saat direfresh
+            header("Location: " . $_SERVER['REQUEST_URI']);
+            exit;
+
         } catch (Exception $e) {
             $pdo->rollBack();
-            $toast_msg = "Kesalahan sistem: " . $e->getMessage();
-            $toast_type = "error";
+            $_SESSION['toast_msg'] = "Kesalahan sistem: " . $e->getMessage();
+            $_SESSION['toast_type'] = "error";
         }
     }
 }
@@ -194,20 +198,11 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
-<!-- Bottom Nav sengaja TIDAK dipanggil agar bersih di layar form (mobile) -->
-
-<!-- Komponen Toast Global -->
+<!-- Komponen Toast Global (Otomatis menangkap Session) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
     lucide.createIcons();
-
-    // Penanganan Toast Dinamis (Menggunakan komponen toast global)
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg && typeof window.showToast === 'function') {
-        window.showToast(phpMsg, phpType);
-    }
 </script>
 
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>
