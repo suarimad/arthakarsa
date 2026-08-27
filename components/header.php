@@ -25,7 +25,7 @@ if (empty($header_user_avatar) && isset($pdo) && isset($_SESSION['user_id'])) {
 if (!empty($header_user_avatar)) {
     $header_avatar_url = ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($header_user_avatar);
 } else {
-    $header_avatar_url = "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($header_user_name);
+    $header_avatar_url = "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($header_user_name);
 }
 ?>
 

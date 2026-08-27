@@ -106,7 +106,7 @@ try {
 // PERBAIKAN iOS PWA: Tambahkan $base_url
 $profile_avatar_url = !empty($user_avatar) 
     ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($user_avatar) 
-    : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($user_name);
+    : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($user_name);
 
 $user_role = $user_pos;
 $tenant_name = $tenant_name_display;
@@ -142,7 +142,7 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <!-- Form Card -->
-            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm p-6 space-y-6">
+            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm  space-y-6">
                 
                 <!-- UPLOAD AVATAR SECTION -->
                 <div class="flex flex-col items-center justify-center text-center pb-6 border-b border-gray-100">
@@ -168,32 +168,32 @@ require_once __DIR__ . '/components/sidebar.php';
                         
                         <!-- Nama (Readonly) -->
                         <div>
-                            <label class="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nama Lengkap</label>
-                            <input type="text" value="<?= htmlspecialchars($user_name) ?>" readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 cursor-not-allowed font-medium focus:outline-none">
-                            <p class="text-[9px] text-gray-400 mt-1">Nama hanya dapat diubah oleh Administrator / HRD.</p>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nama Lengkap</label>
+                            <input type="text" value="<?= htmlspecialchars($user_name) ?>" readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 cursor-not-allowed focus:outline-none transition">
+                            <p class="text-[9px] text-gray-400 mt-1.5">Nama hanya dapat diubah oleh Administrator / HRD.</p>
                         </div>
 
                         <!-- Email (Readonly) -->
                         <div>
-                            <label class="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Alamat Email</label>
-                            <input type="email" value="<?= htmlspecialchars($user_email) ?>" readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 cursor-not-allowed font-medium focus:outline-none">
-                            <p class="text-[9px] text-gray-400 mt-1">Email digunakan sebagai ID login akun Anda.</p>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Alamat Email</label>
+                            <input type="email" value="<?= htmlspecialchars($user_email) ?>" readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 cursor-not-allowed focus:outline-none transition">
+                            <p class="text-[9px] text-gray-400 mt-1.5">Email digunakan sebagai ID login akun Anda.</p>
                         </div>
 
                         <!-- WhatsApp (Editable) -->
                         <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Nomor WhatsApp</label>
-                            <input type="text" name="whatsapp" value="<?= htmlspecialchars($user_whatsapp) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800 font-medium" placeholder="Misal: 08123456789">
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nomor WhatsApp</label>
+                            <input type="text" name="whatsapp" value="<?= htmlspecialchars($user_whatsapp) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none transition" placeholder="Misal: 08123456789">
                         </div>
 
                     </div>
 
                     <!-- Tombol Aksi -->
                     <div class="mt-8 pt-6 border-t border-gray-100 flex gap-3">
-                        <a href="<?= ($base_url ?? '') ?>/profile" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold text-center hover:bg-gray-50 transition">
+                        <a href="<?= ($base_url ?? '') ?>/profile" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
                             Batal
                         </a>
-                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
+                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
                             <i data-lucide="save" class="w-4 h-4"></i> Simpan Perubahan
                         </button>
                     </div>

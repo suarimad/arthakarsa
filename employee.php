@@ -174,7 +174,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 </h3>
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
                     <?php foreach($absentEmployees as $absent): 
-                        $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($absent['name']);
+                        $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($absent['name']);
                         $abs_position = htmlspecialchars($absent['position_name'] ?? $absent['role_display'] ?? ucfirst($absent['role_name'] ?? 'Employee'));
                         $abs_department = htmlspecialchars($absent['department_name'] ?? 'Belum ada departemen');
                     ?>
