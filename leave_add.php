@@ -3,6 +3,9 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
+// Set Timezone ke Asia/Jakarta
+date_default_timezone_set('Asia/Jakarta');
+
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
@@ -119,7 +122,7 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan';
 
-// Helper Tanggal Hari Ini untuk Form Default
+// Helper Tanggal Hari Ini untuk Form Default (Sudah Menggunakan Timezone Jakarta)
 $curr_d = date('d');
 $curr_m = date('m');
 $curr_y = date('Y');
@@ -154,7 +157,7 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php require_once __DIR__ . '/components/header.php'; ?>
         </div>
 
-        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto">
+        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto max-w-4xl">
             
             <div class="flex items-center gap-3 px-1 mb-6">
                 <!-- Back Button diarahkan ke halaman leave -->
@@ -243,7 +246,7 @@ require_once __DIR__ . '/components/sidebar.php';
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Total Hari Kerja</label>
                                 <input type="number" name="total_days" id="total_days" required readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-primary font-bold cursor-not-allowed">
-                                <p class="text-[9px] text-gray-400 mt-1.5">Jumlah hari akan dikalkulasi otomatis.</p>
+                                <p class="text-[9px] text-gray-400 mt-1.5">Sabtu dan Minggu tidak dihitung sebagai hari cuti.</p>
                             </div>
                         </div>
 
@@ -301,8 +304,8 @@ require_once __DIR__ . '/components/sidebar.php';
     $(document).ready(function(){
         $('.dropify').dropify({
             messages: {
-                'default': '',
-                'replace': '',
+                'default': 'Drag and drop atau klik untuk upload file',
+                'replace': 'Drag and drop atau klik untuk ganti file',
                 'remove':  'Hapus',
                 'error':   'Ooops, terjadi kesalahan.'
             }
@@ -310,7 +313,7 @@ require_once __DIR__ . '/components/sidebar.php';
     });
 
     // ==========================================
-    // LOGIKA KALKULASI HARI TERPISAH
+    // LOGIKA KALKULASI HARI TERPISAH (EXCLUDE WEEKEND)
     // ==========================================
     function calculateDays() {
         const sd = document.getElementById('start_day').value;
@@ -348,11 +351,28 @@ require_once __DIR__ . '/components/sidebar.php';
                 return;
             }
             
-            // Hitung selisih (+1 karena inclusive hari pertama)
-            const diffTime = Math.abs(endDate - startDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            // Kalkulasi dengan mengabaikan Sabtu (6) dan Minggu (0)
+            let countDays = 0;
+            let currentDate = new Date(startDate);
             
-            totalInput.value = diffDays;
+            while (currentDate <= endDate) {
+                const dayOfWeek = currentDate.getDay();
+                // Hanya hitung jika bukan Minggu (0) dan bukan Sabtu (6)
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    countDays++;
+                }
+                // Lanjut ke hari berikutnya
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            // Validasi jika total hari jadi 0 (misal cuma ngajuin pas hari Sabtu-Minggu)
+            if (countDays === 0) {
+                if(typeof window.showToast === 'function') window.showToast("Rentang tanggal yang dipilih hanya berisi hari libur akhir pekan!", "failed");
+                totalInput.value = '';
+                return;
+            }
+
+            totalInput.value = countDays;
         } else {
             totalInput.value = '';
         }
