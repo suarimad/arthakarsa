@@ -304,9 +304,9 @@ require_once __DIR__ . '/components/sidebar.php';
     $(document).ready(function(){
         $('.dropify').dropify({
             messages: {
-                'default': 'Drag and drop atau klik untuk upload file',
-                'replace': 'Drag and drop atau klik untuk ganti file',
-                'remove':  'Hapus',
+                'default': '',
+                'replace': '',
+                'remove':  '',
                 'error':   'Ooops, terjadi kesalahan.'
             }
         });
