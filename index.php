@@ -392,6 +392,7 @@ require_once __DIR__ . '/components/sidebar.php';
     <div id="attendanceOverlay" onclick="closeAttendance()" class="absolute inset-0 bg-gray-900/80 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
+        <!-- Card Container Responsive -->
         <div id="attendanceCard" class="bg-surface w-full max-w-sm md:max-w-3xl rounded-3xl shadow-2xl transform scale-95 opacity-0 transition-all duration-300 pointer-events-auto relative overflow-hidden flex flex-col">
             
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
@@ -404,14 +405,14 @@ require_once __DIR__ . '/components/sidebar.php';
                 </button>
             </div>
 
-            <!-- UI 1: MODE KAMERA (Responsive aspect ratio) -->
+            <!-- UI 1: MODE KAMERA -->
             <div id="cameraUI" class="relative bg-black aspect-[3/4] md:aspect-video w-full items-center justify-center overflow-hidden hidden">
                 <video id="cameraStream" autoplay playsinline class="w-full h-full object-cover"></video>
                 
                 <!-- Kontainer Bawah untuk Status & Tombol -->
                 <div class="absolute bottom-4 left-4 right-4 z-10 flex flex-col gap-3">
                     
-                    <!-- Tombol Flip Kamera (Hanya muncul jika geo_photo / photo_only) -->
+                    <!-- Tombol Flip Kamera -->
                     <div id="flipCameraContainer" class="self-end hidden mb-1">
                         <button type="button" onclick="flipCamera()" class="bg-black/50 backdrop-blur-md text-white p-2.5 rounded-full border border-white/10 hover:bg-white/20 transition shadow-lg active:scale-95">
                             <i data-lucide="switch-camera" class="w-5 h-5"></i>
@@ -419,7 +420,7 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
 
                     <!-- Box Status Validasi -->
-                    <div class="bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10 w-full shadow-lg">
+                    <div id="statusValidationBox" class="bg-black/50 backdrop-blur-md rounded-xl p-3 border border-white/10 w-full shadow-lg">
                         <div class="flex items-start gap-2">
                             <i data-lucide="scan-face" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
                             <div class="flex-1 min-w-0">
@@ -429,7 +430,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         </div>
                     </div>
 
-                    <!-- Tombol Ambil Foto Manual (Ada di Bawah Status, Tidak menutupi Kamera Utama) -->
+                    <!-- Tombol Ambil Foto Manual -->
                     <div id="manualActionCamera" class="w-full hidden">
                         <button id="btnManualCamera" onclick="manualCaptureAndSubmit()" class="w-full bg-primary text-surface px-6 py-3.5 rounded-xl shadow-xl border border-white/20 font-bold flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-95">
                             <i data-lucide="camera" class="w-5 h-5"></i> Ambil Foto & Absen
@@ -439,9 +440,8 @@ require_once __DIR__ . '/components/sidebar.php';
                 </div>
             </div>
 
-            <!-- UI 2: MODE NON-KAMERA (Lebih Compact, Tanpa Video) -->
+            <!-- UI 2: MODE NON-KAMERA -->
             <div id="noCameraUI" class="relative bg-gray-50 aspect-[3/4] md:aspect-video w-full flex-col items-center justify-center overflow-hidden hidden p-6">
-                <!-- Motif Latar Belakang -->
                 <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#ea3800 1px, transparent 1px); background-size: 20px 20px;"></div>
                 
                 <div class="relative z-10 flex flex-col items-center w-full max-w-sm mx-auto">
@@ -562,7 +562,7 @@ require_once __DIR__ . '/components/sidebar.php';
     // LOGIKA ABSENSI DINAMIS (METODE CUSTOM)
     // ==========================================
     let cameraStream = null, faceInterval = null, isProcessing = false; 
-    let currentFacingMode = 'user'; // Dinamis sesuai konfigurasi & switch
+    let currentFacingMode = 'user'; 
 
     const attModal = document.getElementById('attendanceModal');
     const attOverlay = document.getElementById('attendanceOverlay');
@@ -678,7 +678,7 @@ require_once __DIR__ . '/components/sidebar.php';
         if(methodConfig.ai && !savedFaceDescriptor) { openFaceWarning(); return; }
 
         isProcessing = false; 
-        currentFacingMode = methodConfig.facing; // Setel ke default konfig
+        currentFacingMode = methodConfig.facing; 
         
         attType.value = type;
         attTitle.innerText = type === 'in' ? 'Absen Masuk' : 'Absen Pulang';
@@ -698,11 +698,17 @@ require_once __DIR__ . '/components/sidebar.php';
             if(currentFacingMode === 'user') video.classList.add('scale-x-[-1]');
             else video.classList.remove('scale-x-[-1]');
 
-            // Tampilkan tombol Flip Camera JIKA metodenya foto (Bisa ke belakang / ke depan)
             if(attendanceMethod === 'geo_photo' || attendanceMethod === 'photo_only') {
                 document.getElementById('flipCameraContainer').classList.remove('hidden');
             } else {
                 document.getElementById('flipCameraContainer').classList.add('hidden');
+            }
+
+            // Sembunyikan box status validasi jika tidak perlu validasi GPS & AI (Murni Foto Selfie/Kamera Saja)
+            if(attendanceMethod === 'selfie_only' || attendanceMethod === 'photo_only') {
+                document.getElementById('statusValidationBox').classList.add('hidden');
+            } else {
+                document.getElementById('statusValidationBox').classList.remove('hidden');
             }
 
         } else {
@@ -762,7 +768,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                 const distRounded = Math.round(distance);
 
                                 if (distance > officeRadius) {
-                                    const diff = distRounded - officeRadius;
                                     setStatus(`<span class="text-failed font-bold">Akses Ditolak</span><br>Anda berada di luar radius.<br>Jarak: <span class="text-failed">${distRounded}m</span> (Batas: ${officeRadius}m)`, 'failed');
                                     return; 
                                 } else {
