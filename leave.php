@@ -6,6 +6,15 @@ require_once __DIR__ . '/components/auth.php';
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
+// Ambil Timezone dari tenant_settings untuk Tenant Terkait
+$stmtTS = $pdo->prepare("SELECT timezone FROM tenant_settings WHERE tenant_id = ?");
+$stmtTS->execute([$tenant_id]);
+$tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
+date_default_timezone_set($tz_setting);
+
+// Generate waktu saat ini berdasarkan timezone tenant
+$current_time = date('Y-m-d H:i:s');
+
 // ==============================================================================
 // LOGIKA HAK AKSES (ROLE-BASED)
 // ==============================================================================
@@ -77,8 +86,9 @@ if (isset($_REQUEST['ajax_action'])) {
                     if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
                         $pdo->beginTransaction();
 
-                        // Soft Delete Data Pengajuan
-                        $pdo->prepare("UPDATE leave_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
+                        // Soft Delete Data Pengajuan (Gunakan Datetime eksplisit)
+                        $pdo->prepare("UPDATE leave_requests SET deleted_at = ?, updated_at = ? WHERE id = ?")
+                            ->execute([$current_time, $current_time, $id]);
 
                         // Jika pengajuan sudah approved & berjenis 'cuti', kembalikan kuota cuti user
                         if ($req['status'] === 'approved' && strtolower($req['type']) === 'cuti') {
@@ -108,8 +118,9 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
-                $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_note = ? WHERE id = ? AND tenant_id = ?")
-                    ->execute([$status, $user_id, $note, $id, $tenant_id]);
+                // Update status dengan parameter Datetime eksplisit
+                $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
+                    ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
 
                 if ($action === 'approve') {
                     $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ?");

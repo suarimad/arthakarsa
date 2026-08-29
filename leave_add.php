@@ -12,6 +12,8 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
+$current_time = date('Y-m-d H:i:s');
+
 // Ambil Sisa Cuti User
 $curr_year = date('Y');
 $stmtQuota = $pdo->prepare("SELECT total_quota, used_quota FROM leave_balances WHERE user_id = ? AND year = ?");
@@ -55,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     
     if ($status === 'approved') {
         $approved_by = $user_id;
-        $approved_at = date('Y-m-d H:i:s');
+        $approved_at = $current_time;
     }
 
     $today = date('Y-m-d');
@@ -164,15 +166,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             }
 
             $stmt = $pdo->prepare("
-                INSERT INTO leave_requests (tenant_id, user_id, type, start_date, end_date, total_days, reason, attachment, status, approved_by, approved_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO leave_requests (tenant_id, user_id, type, start_date, end_date, total_days, reason, attachment, status, approved_by, approved_at, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$tenant_id, $user_id, $type, $start_date, $end_date, $total_days, $reason, $attachment, $status, $approved_by, $approved_at]);
+            $stmt->execute([$tenant_id, $user_id, $type, $start_date, $end_date, $total_days, $reason, $attachment, $status, $approved_by, $approved_at, $current_time, $current_time]);
 
             if ($status === 'approved' && $type === 'cuti') {
                 $year = date('Y', strtotime($start_date));
-                $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ? WHERE user_id = ? AND year = ?")
-                    ->execute([$total_days, $user_id, $year]);
+                // Update quota dan waktu pada tabel balances
+                $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ?")
+                    ->execute([$total_days, $current_time, $user_id, $year]);
             }
 
             $type_label = ucfirst($type);
