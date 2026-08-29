@@ -127,7 +127,7 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
         <?php endif; ?>
 
         <!-- ================= FINANCE MENU ================= -->
-        <?php if ($sb_role_name === 'finance'): ?>
+        <?php if (in_array($sb_role_name, ['finance', 'admin', 'superadmin'])): ?>
         <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Finance Menu</div>
         <a href="<?= $base_url ?? '' ?>/payslips" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= (in_array($current_page, ['payslips', 'payslips_detail'])) ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
             <i data-lucide="banknote" class="w-4 h-4"></i> Daftar Payroll

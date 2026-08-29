@@ -40,9 +40,9 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
         </a>
         
         <!-- 5. Profil -->
-        <a href="<?= $base_url ?? '' ?>/profile" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
+        <a href="<?= $base_url ?? '' ?>/profile" class="flex flex-col items-center gap-1.5 w-12 <?= ($current_page == 'profile' || $current_page == 'profile_edit' || $current_page == 'change_password') ? 'text-primary' : 'text-gray-400 hover:text-primary transition' ?>">
             <i data-lucide="user" class="w-5 h-5"></i>
-            <span class="text-[9px] <?= ($current_page == 'profile' || $current_page == 'profile_edit') ? 'font-semibold' : 'font-medium' ?>">Profil</span>
+            <span class="text-[9px] <?= ($current_page == 'profile' || $current_page == 'profile_edit' || $current_page == 'change_password') ? 'font-semibold' : 'font-medium' ?>">Profil</span>
         </a>
 
     </div>
@@ -330,6 +330,30 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                                 <i data-lucide="timer" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Timesheet<br>Tim</span>
+                        </a>
+
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- SECTION 5: FINANCE MENU (Muncul untuk Finance, Admin, & Superadmin) -->
+                <?php if (in_array($bn_role_name, ['finance', 'admin', 'superadmin'])): ?>
+                <div>
+                    <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Finance Menu</h4>
+                    <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
+                        
+                        <a href="<?= $base_url ?? '' ?>/payslips" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="banknote" class="w-6 h-6 md:w-7 md:h-7"></i>
+                            </div>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-teal-600 transition-colors">Daftar<br>Payroll</span>
+                        </a>
+
+                        <a href="<?= $base_url ?? '' ?>/reimbursement" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="receipt" class="w-6 h-6 md:w-7 md:h-7"></i>
+                            </div>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-emerald-600 transition-colors">Approval<br>Klaim</span>
                         </a>
 
                     </div>
