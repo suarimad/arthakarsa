@@ -179,7 +179,9 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
         </div>
 
-        <?php require_once __DIR__ . '/components/header.php'; ?>
+        <?php if (!$profile_uuid): ?>
+            <?php require_once __DIR__ . '/components/header.php'; ?>
+        <?php endif; ?>
 
         <?php if ($profile_uuid && $profile_data): 
             // ============================================================
@@ -475,7 +477,6 @@ require_once __DIR__ . '/components/sidebar.php';
     <div id="employeeDetailOverlay" onclick="closeEmployeeDetail()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
-        <!-- PERBAIKAN: md:max-w-sm memastikan di mobile menjadi w-full, dan desktop max-w-sm -->
         <div id="employeeDetailCard" class="bg-surface w-full md:max-w-sm rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col p-6">
             
             <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeEmployeeDetail()">
@@ -526,10 +527,10 @@ require_once __DIR__ . '/components/sidebar.php';
         </div>
     </div>
 </div>
-<?php endif; ?>
 
 <!-- Load Bottom Nav (PENTING: Di-load agar navigasi muncul di mobile) -->
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
+<?php endif; ?>
 
 <!-- Komponen Toast Global (Menangkap Session) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
@@ -538,51 +539,7 @@ require_once __DIR__ . '/components/sidebar.php';
     lucide.createIcons();
 
     // ==========================================
-    // LOGIKA PWA & PULL TO REFRESH
-    // ==========================================
-    const ptrContainer = document.getElementById('main-scroll-container');
-    const ptrIndicator = document.getElementById('ptr-indicator');
-    let startY = 0, currentY = 0, isPulling = false;
-
-    if(ptrContainer && ptrIndicator) {
-        ptrContainer.addEventListener('touchstart', (e) => {
-            if (ptrContainer.scrollTop <= 5) { 
-                startY = e.touches[0].clientY;
-                isPulling = true;
-                ptrIndicator.style.transition = 'none'; 
-            }
-        }, { passive: true });
-
-        ptrContainer.addEventListener('touchmove', (e) => {
-            if (!isPulling) return;
-            currentY = e.touches[0].clientY;
-            let distance = currentY - startY;
-
-            if (distance > 0 && ptrContainer.scrollTop <= 5) {
-                if (distance > 100) distance = 100 + (distance - 100) * 0.2;
-                ptrIndicator.style.height = `${distance}px`;
-            } else {
-                isPulling = false;
-            }
-        }, { passive: true });
-
-        ptrContainer.addEventListener('touchend', () => {
-            if (!isPulling) return;
-            isPulling = false;
-            ptrIndicator.style.transition = 'height 0.3s ease';
-
-            if (parseFloat(ptrIndicator.style.height) > 60) {
-                ptrIndicator.style.height = '60px'; 
-                setTimeout(() => { window.location.reload(); }, 400);
-            } else {
-                ptrIndicator.style.height = '0px';
-            }
-        });
-    }
-
-    <?php if (!$profile_uuid): ?>
-    // ==========================================
-    // LOGIKA MODAL DETAIL KARYAWAN (KHUSUS MODE LIST)
+    // LOGIKA MODAL DETAIL KARYAWAN
     // ==========================================
     let currentDetailEmpId = null;
     let currentDetailEmpUuid = null;
@@ -674,6 +631,50 @@ require_once __DIR__ . '/components/sidebar.php';
             });
     }
 
+    // ==========================================
+    // PULL TO REFRESH (PWA)
+    // ==========================================
+    const ptrContainer = document.getElementById('main-scroll-container');
+    const ptrIndicator = document.getElementById('ptr-indicator');
+    let startY = 0, currentY = 0, isPulling = false;
+
+    if(ptrContainer && ptrIndicator) {
+        ptrContainer.addEventListener('touchstart', (e) => {
+            if (ptrContainer.scrollTop <= 5) { 
+                startY = e.touches[0].clientY;
+                isPulling = true;
+                ptrIndicator.style.transition = 'none'; 
+            }
+        }, { passive: true });
+
+        ptrContainer.addEventListener('touchmove', (e) => {
+            if (!isPulling) return;
+            currentY = e.touches[0].clientY;
+            let distance = currentY - startY;
+
+            if (distance > 0 && ptrContainer.scrollTop <= 5) {
+                if (distance > 100) distance = 100 + (distance - 100) * 0.2;
+                ptrIndicator.style.height = `${distance}px`;
+            } else {
+                isPulling = false;
+            }
+        }, { passive: true });
+
+        ptrContainer.addEventListener('touchend', () => {
+            if (!isPulling) return;
+            isPulling = false;
+            ptrIndicator.style.transition = 'height 0.3s ease';
+
+            if (parseFloat(ptrIndicator.style.height) > 60) {
+                ptrIndicator.style.height = '60px'; 
+                setTimeout(() => { window.location.reload(); }, 400);
+            } else {
+                ptrIndicator.style.height = '0px';
+            }
+        });
+    }
+
+    <?php if (!$profile_uuid): ?>
     // ==========================================
     // SEARCH AJAX (Menembus Batas Departemen)
     // ==========================================
