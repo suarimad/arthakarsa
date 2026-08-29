@@ -68,7 +68,7 @@ foreach ($details as $d) {
     else $deductions[] = $d;
 }
 
-// Ambil info perusahaan (Tenant)
+// Ambil info perusahaan (Tenant) beserta logo
 $stmtTenant = $pdo->prepare("SELECT name, email, phone, address, logo FROM tenants WHERE id = ?");
 $stmtTenant->execute([$tenant_id]);
 $tenant = $stmtTenant->fetch(PDO::FETCH_ASSOC);
@@ -76,6 +76,8 @@ $tenant = $stmtTenant->fetch(PDO::FETCH_ASSOC);
 // Helper Data
 $month_names = [1=>'Januari', 2=>'Februari', 3=>'Maret', 4=>'April', 5=>'Mei', 6=>'Juni', 7=>'Juli', 8=>'Agustus', 9=>'September', 10=>'Oktober', 11=>'November', 12=>'Desember'];
 $period_str = $month_names[$payslip['month']] . " " . $payslip['year'];
+
+// Path ke folder assets/img/tenants/
 $tenant_logo = !empty($tenant['logo']) ? ($base_url ?? '') . '/assets/img/tenants/' . htmlspecialchars($tenant['logo']) : null;
 
 // Format Rupiah
@@ -88,7 +90,7 @@ function formatRp($angka) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payslip - <?= htmlspecialchars($payslip['employee_name']) ?> - <?= $period_str ?></title>
+    <title>Slip Gaji - <?= htmlspecialchars($payslip['employee_name']) ?> - <?= $period_str ?></title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -173,60 +175,69 @@ function formatRp($angka) {
         <div class="watermark">PAID</div>
 
         <!-- ================= HEADER PERUSAHAAN ================= -->
-        <header class="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-8 relative z-10">
-            <div class="flex items-center gap-4">
+        <header class="flex justify-between items-start border-b-2 border-gray-800 pb-5 mb-6 relative z-10">
+            <div class="flex items-center gap-3">
                 <?php if ($tenant_logo): ?>
-                    <img src="<?= $tenant_logo ?>" alt="Logo" class="w-16 h-16 object-contain">
+                    <img src="<?= $tenant_logo ?>" alt="Logo" class="w-14 h-14 object-contain">
                 <?php else: ?>
-                    <div class="w-16 h-16 bg-primary/10 text-primary rounded-xl flex items-center justify-center border border-primary/20">
-                        <i data-lucide="building" class="w-8 h-8"></i>
+                    <div class="w-14 h-14 bg-primary/10 text-primary rounded-xl flex items-center justify-center border border-primary/20">
+                        <i data-lucide="building" class="w-7 h-7"></i>
                     </div>
                 <?php endif; ?>
                 <div>
-                    <h1 class="text-2xl font-black text-gray-900 tracking-tight"><?= htmlspecialchars($tenant['name'] ?? 'Perusahaan') ?></h1>
-                    <p class="text-xs text-gray-500 mt-1 max-w-xs leading-relaxed"><?= htmlspecialchars($tenant['address'] ?? 'Alamat belum diatur') ?></p>
+                    <h1 class="text-xl font-black text-gray-900 tracking-tight"><?= htmlspecialchars($tenant['name'] ?? 'Perusahaan') ?></h1>
+                    <p class="text-[10px] text-gray-500 mt-0.5 max-w-sm leading-relaxed">
+                        <?= htmlspecialchars($tenant['address'] ?? 'Alamat belum diatur') ?><br>
+                        <?php if(!empty($tenant['phone'])): ?>
+                            Telp: <?= htmlspecialchars($tenant['phone']) ?>
+                        <?php endif; ?>
+                        <?php if(!empty($tenant['phone']) && !empty($tenant['email'])): ?> | <?php endif; ?>
+                        <?php if(!empty($tenant['email'])): ?>
+                            Email: <?= htmlspecialchars($tenant['email']) ?>
+                        <?php endif; ?>
+                    </p>
                 </div>
             </div>
             <div class="text-right">
-                <h2 class="text-3xl font-black text-primary uppercase tracking-widest mb-1">PAYSLIP</h2>
-                <p class="text-sm font-bold text-gray-600 bg-gray-100 inline-block px-3 py-1 rounded-lg">Periode: <?= $period_str ?></p>
+                <h2 class="text-2xl font-black text-primary uppercase tracking-widest mb-1">SLIP GAJI</h2>
+                <p class="text-[10px] font-bold text-gray-600 bg-gray-100 inline-block px-2.5 py-1 rounded-md">Periode: <?= $period_str ?></p>
             </div>
         </header>
 
         <!-- ================= INFO KARYAWAN ================= -->
-        <section class="grid grid-cols-2 gap-8 mb-10 relative z-10">
+        <section class="grid grid-cols-2 gap-6 mb-8 relative z-10">
             <div>
-                <table class="w-full text-sm">
-                    <tr><td class="py-1.5 text-gray-500 w-32 font-medium">Nama Karyawan</td><td class="py-1.5 font-bold text-gray-900">: <?= htmlspecialchars($payslip['employee_name']) ?></td></tr>
-                    <tr><td class="py-1.5 text-gray-500 w-32 font-medium">Departemen</td><td class="py-1.5 font-bold text-gray-900">: <?= htmlspecialchars($payslip['department_name'] ?? '-') ?></td></tr>
-                    <tr><td class="py-1.5 text-gray-500 w-32 font-medium">Jabatan</td><td class="py-1.5 font-bold text-gray-900">: <?= htmlspecialchars($payslip['position_name'] ?? '-') ?></td></tr>
+                <table class="w-full text-xs">
+                    <tr><td class="py-1 text-gray-500 w-28 font-medium">Nama Karyawan</td><td class="py-1 font-bold text-gray-900">: <?= htmlspecialchars($payslip['employee_name']) ?></td></tr>
+                    <tr><td class="py-1 text-gray-500 w-28 font-medium">Departemen</td><td class="py-1 font-bold text-gray-900">: <?= htmlspecialchars($payslip['department_name'] ?? '-') ?></td></tr>
+                    <tr><td class="py-1 text-gray-500 w-28 font-medium">Jabatan</td><td class="py-1 font-bold text-gray-900">: <?= htmlspecialchars($payslip['position_name'] ?? '-') ?></td></tr>
                 </table>
             </div>
             <div>
-                <table class="w-full text-sm">
-                    <tr><td class="py-1.5 text-gray-500 w-32 font-medium">ID Slip</td><td class="py-1.5 font-bold text-gray-900">: #PSL-<?= str_pad($payslip['id'], 6, '0', STR_PAD_LEFT) ?></td></tr>
-                    <tr><td class="py-1.5 text-gray-500 w-32 font-medium">Tanggal Bayar</td><td class="py-1.5 font-bold text-gray-900">: <?= !empty($payslip['payment_date']) ? date('d F Y', strtotime($payslip['payment_date'])) : '-' ?></td></tr>
-                    <tr><td class="py-1.5 text-gray-500 w-32 font-medium">Metode</td><td class="py-1.5 font-bold text-gray-900">: <?= htmlspecialchars($payslip['bank_name'] ?? 'Tunai') ?> (<?= htmlspecialchars($payslip['bank_account'] ?? '-') ?>)</td></tr>
+                <table class="w-full text-xs">
+                    <tr><td class="py-1 text-gray-500 w-28 font-medium">ID Slip</td><td class="py-1 font-bold text-gray-900">: #PSL-<?= str_pad($payslip['id'], 6, '0', STR_PAD_LEFT) ?></td></tr>
+                    <tr><td class="py-1 text-gray-500 w-28 font-medium">Tanggal Bayar</td><td class="py-1 font-bold text-gray-900">: <?= !empty($payslip['payment_date']) ? date('d F Y', strtotime($payslip['payment_date'])) : '-' ?></td></tr>
+                    <tr><td class="py-1 text-gray-500 w-28 font-medium">Metode</td><td class="py-1 font-bold text-gray-900">: <?= htmlspecialchars($payslip['bank_name'] ?? 'Tunai') ?> (<?= htmlspecialchars($payslip['bank_account'] ?? '-') ?>)</td></tr>
                 </table>
             </div>
         </section>
 
         <!-- ================= TABEL RINCIAN GAJI ================= -->
         <section class="flex-1 relative z-10">
-            <div class="grid grid-cols-2 gap-8">
+            <div class="grid grid-cols-2 gap-6">
                 
                 <!-- PENDAPATAN (EARNINGS) -->
                 <div>
-                    <h3 class="text-sm font-black text-gray-800 uppercase tracking-wider mb-3 border-b border-gray-300 pb-2">Pendapatan</h3>
-                    <table class="w-full text-sm">
+                    <h3 class="text-xs font-black text-gray-800 uppercase tracking-wider mb-2 border-b border-gray-300 pb-1.5">Pendapatan</h3>
+                    <table class="w-full text-xs">
                         <tbody>
                             <?php if (empty($earnings)): ?>
-                                <tr><td class="py-2 text-gray-400 italic">Tidak ada pendapatan</td><td class="py-2 text-right">-</td></tr>
+                                <tr><td class="py-1.5 text-gray-400 italic">Tidak ada pendapatan</td><td class="py-1.5 text-right">-</td></tr>
                             <?php else: ?>
                                 <?php foreach($earnings as $e): ?>
                                     <tr>
-                                        <td class="py-2 text-gray-700 font-medium"><?= htmlspecialchars($e['name']) ?></td>
-                                        <td class="py-2 text-right font-semibold text-gray-900"><?= formatRp($e['amount']) ?></td>
+                                        <td class="py-1.5 text-gray-700 font-medium"><?= htmlspecialchars($e['name']) ?></td>
+                                        <td class="py-1.5 text-right font-semibold text-gray-900"><?= formatRp($e['amount']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -236,16 +247,16 @@ function formatRp($angka) {
 
                 <!-- POTONGAN (DEDUCTIONS) -->
                 <div>
-                    <h3 class="text-sm font-black text-gray-800 uppercase tracking-wider mb-3 border-b border-gray-300 pb-2">Potongan</h3>
-                    <table class="w-full text-sm">
+                    <h3 class="text-xs font-black text-gray-800 uppercase tracking-wider mb-2 border-b border-gray-300 pb-1.5">Potongan</h3>
+                    <table class="w-full text-xs">
                         <tbody>
                             <?php if (empty($deductions)): ?>
-                                <tr><td class="py-2 text-gray-400 italic">Tidak ada potongan</td><td class="py-2 text-right">-</td></tr>
+                                <tr><td class="py-1.5 text-gray-400 italic">Tidak ada potongan</td><td class="py-1.5 text-right">-</td></tr>
                             <?php else: ?>
                                 <?php foreach($deductions as $d): ?>
                                     <tr>
-                                        <td class="py-2 text-gray-700 font-medium"><?= htmlspecialchars($d['name']) ?></td>
-                                        <td class="py-2 text-right font-semibold text-red-600">- <?= formatRp($d['amount']) ?></td>
+                                        <td class="py-1.5 text-gray-700 font-medium"><?= htmlspecialchars($d['name']) ?></td>
+                                        <td class="py-1.5 text-right font-semibold text-red-600">- <?= formatRp($d['amount']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -256,21 +267,21 @@ function formatRp($angka) {
             </div>
 
             <!-- RINGKASAN (SUMMARY) -->
-            <div class="mt-8 border-t-2 border-gray-800 pt-4">
+            <div class="mt-6 border-t-2 border-gray-800 pt-3">
                 <div class="flex justify-end">
                     <div class="w-1/2">
-                        <table class="w-full text-sm">
+                        <table class="w-full text-xs">
                             <tr>
-                                <td class="py-2 text-gray-600 font-semibold">Total Pendapatan</td>
-                                <td class="py-2 text-right font-bold text-gray-900"><?= formatRp($payslip['basic_salary'] + $payslip['total_earnings']) ?></td>
+                                <td class="py-1.5 text-gray-600 font-semibold">Total Pendapatan</td>
+                                <td class="py-1.5 text-right font-bold text-gray-900"><?= formatRp($payslip['basic_salary'] + $payslip['total_earnings']) ?></td>
                             </tr>
                             <tr>
-                                <td class="py-2 text-gray-600 font-semibold border-b border-gray-200 pb-4">Total Potongan</td>
-                                <td class="py-2 text-right font-bold text-red-600 border-b border-gray-200 pb-4">- <?= formatRp($payslip['total_deductions']) ?></td>
+                                <td class="py-1.5 text-gray-600 font-semibold border-b border-gray-200 pb-3">Total Potongan</td>
+                                <td class="py-1.5 text-right font-bold text-red-600 border-b border-gray-200 pb-3">- <?= formatRp($payslip['total_deductions']) ?></td>
                             </tr>
                             <tr>
-                                <td class="py-4 text-base font-black text-gray-800 uppercase tracking-wider">Take Home Pay</td>
-                                <td class="py-4 text-right text-xl font-black text-primary"><?= formatRp($payslip['net_salary']) ?></td>
+                                <td class="py-3 text-sm font-black text-gray-800 uppercase tracking-wider">Take Home Pay</td>
+                                <td class="py-3 text-right text-lg font-black text-primary"><?= formatRp($payslip['net_salary']) ?></td>
                             </tr>
                         </table>
                     </div>
@@ -279,22 +290,22 @@ function formatRp($angka) {
         </section>
 
         <!-- ================= TANDA TANGAN ================= -->
-        <section class="mt-16 flex justify-between relative z-10 pt-10">
-            <div class="text-center w-48">
-                <p class="text-sm font-semibold text-gray-600 mb-20">Penerima,</p>
-                <p class="text-sm font-bold text-gray-900 underline underline-offset-4"><?= htmlspecialchars($payslip['employee_name']) ?></p>
-                <p class="text-xs text-gray-500 mt-1">Karyawan</p>
+        <section class="mt-12 flex justify-between relative z-10 pt-8">
+            <div class="text-center w-40">
+                <p class="text-xs font-semibold text-gray-600 mb-16">Penerima,</p>
+                <p class="text-xs font-bold text-gray-900 underline underline-offset-4"><?= htmlspecialchars($payslip['employee_name']) ?></p>
+                <p class="text-[10px] text-gray-500 mt-1">Karyawan</p>
             </div>
             
-            <div class="text-center w-48">
-                <p class="text-sm font-semibold text-gray-600 mb-20">Disetujui Oleh,</p>
-                <p class="text-sm font-bold text-gray-900 underline underline-offset-4">HR & Finance</p>
-                <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars($tenant['name'] ?? 'Perusahaan') ?></p>
+            <div class="text-center w-40">
+                <p class="text-xs font-semibold text-gray-600 mb-16">Disetujui Oleh,</p>
+                <p class="text-xs font-bold text-gray-900 underline underline-offset-4">HR & Finance</p>
+                <p class="text-[10px] text-gray-500 mt-1"><?= htmlspecialchars($tenant['name'] ?? 'Perusahaan') ?></p>
             </div>
         </section>
 
         <!-- Footer -->
-        <footer class="mt-8 pt-4 border-t border-gray-200 text-center text-[10px] text-gray-400 relative z-10">
+        <footer class="mt-8 pt-4 border-t border-gray-200 text-center text-[9px] text-gray-400 relative z-10">
             Dokumen ini diterbitkan secara elektronik oleh sistem HRIS dan sah secara hukum tanpa tanda tangan basah.
         </footer>
 
@@ -304,7 +315,6 @@ function formatRp($angka) {
         lucide.createIcons();
         
         // Opsional: Otomatis memicu jendela Print saat halaman selesai dimuat.
-        // Uncomment baris di bawah ini jika ingin langsung auto-print.
         // window.onload = function() { window.print(); }
     </script>
 </body>

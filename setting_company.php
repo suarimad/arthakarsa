@@ -15,6 +15,9 @@ if (!in_array($role_id, [1, 2]) && !in_array($role_name_session, ['admin', 'supe
 
 $tenant_id = $_SESSION['tenant_id'];
 
+// Variabel penampung error untuk Mini Debugger
+$debug_error = null;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -102,9 +105,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header("Location: " . $_SERVER['REQUEST_URI']);
             exit;
         } catch (Exception $e) {
-            $pdo->rollBack();
-            $_SESSION['toast_msg'] = "Kesalahan: " . $e->getMessage();
+            if($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['toast_msg'] = "Gagal memperbarui pengaturan. Cek Debugger (Superadmin).";
             $_SESSION['toast_type'] = "error";
+            
+            // Tangkap full message untuk debug
+            $debug_error = [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ];
         }
     }
 }
@@ -118,7 +129,16 @@ try {
     $stmtSettings = $pdo->prepare("SELECT * FROM tenant_settings WHERE tenant_id = ?");
     $stmtSettings->execute([$tenant_id]);
     if ($settingsData = $stmtSettings->fetch(PDO::FETCH_ASSOC)) $tenantData = array_merge($tenantData, $settingsData);
-} catch (Exception $e) {}
+} catch (Exception $e) {
+    if (empty($debug_error)) {
+        $debug_error = [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ];
+    }
+}
 
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
@@ -138,7 +158,7 @@ require_once __DIR__ . '/components/sidebar.php';
 </style>
 
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
-    <main class="w-full min-h-screen pb-6 md:pb-8 md:px-6">
+    <main class="w-full min-h-screen pb-20 md:pb-8 md:px-6">
         <div class="hidden md:block"><?php require_once __DIR__ . '/components/header.php'; ?></div>
 
         <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto ">
@@ -239,6 +259,81 @@ require_once __DIR__ . '/components/sidebar.php';
         </div>
     </main>
 </div>
+
+<!-- ================= MINI DEBUGGER (KHUSUS SUPERADMIN) ================= -->
+<?php if ($role_id == 1): ?>
+    <!-- Tombol Floating Debugger -->
+    <div id="debugFloatingBtn" class="fixed bottom-24 md:bottom-6 right-6 z-[9999]">
+        <button onclick="toggleDebugger()" class="bg-gray-900 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.5)] hover:bg-gray-800 transition transform hover:scale-105 group relative outline-none">
+            <i data-lucide="bug" class="w-5 h-5 <?= !empty($debug_error) ? 'text-failed animate-pulse' : '' ?>"></i>
+            <!-- Indikator Error Kecil di atas tombol -->
+            <?php if (!empty($debug_error)): ?>
+                <span class="absolute -top-1 -right-1 w-3 h-3 bg-failed rounded-full border-2 border-white"></span>
+            <?php endif; ?>
+        </button>
+    </div>
+
+    <!-- Panel Debugger -->
+    <div id="debugPanel" class="fixed bottom-0 left-0 right-0 h-[45vh] bg-[#1e1e1e] border-t-4 border-<?= !empty($debug_error) ? 'failed' : 'green-500' ?> shadow-2xl z-[10000] transform translate-y-full transition-transform duration-300 flex flex-col font-mono">
+        <!-- Header Panel -->
+        <div class="flex justify-between items-center bg-[#252526] px-4 py-2 text-white shrink-0 border-b border-gray-700">
+            <div class="flex items-center gap-2">
+                <i data-lucide="terminal" class="w-4 h-4 text-green-400"></i>
+                <h3 class="text-xs font-bold tracking-wider">Mini Debugger</h3>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-[10px] <?= !empty($debug_error) ? 'text-failed font-bold' : 'text-green-500' ?>">
+                    Status: <?= !empty($debug_error) ? 'Exception Caught' : 'OK (No Error)' ?>
+                </span>
+                <button onclick="toggleDebugger()" class="text-gray-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Content Panel -->
+        <div class="flex-1 overflow-y-auto p-4 text-[11px] leading-relaxed text-gray-300">
+            <?php if (!empty($debug_error)): ?>
+                <div class="mb-4 bg-red-900/20 border border-red-900/50 p-3 rounded-lg">
+                    <p class="text-failed font-bold mb-1">[ERROR MESSAGE]</p>
+                    <p class="text-red-300 break-words"><?= htmlspecialchars($debug_error['message']) ?></p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-yellow-500 font-bold mb-1">[LOCATION]</p>
+                    <p>File: <span class="text-yellow-200"><?= htmlspecialchars($debug_error['file']) ?></span></p>
+                    <p>Line: <span class="text-yellow-200"><?= htmlspecialchars($debug_error['line']) ?></span></p>
+                </div>
+                <div>
+                    <p class="text-blue-400 font-bold mb-1">[STACK TRACE]</p>
+                    <pre class="whitespace-pre-wrap break-words text-blue-200 bg-black/30 p-3 rounded-lg overflow-x-auto"><?= htmlspecialchars($debug_error['trace']) ?></pre>
+                </div>
+            <?php else: ?>
+                <div class="h-full flex flex-col items-center justify-center opacity-50">
+                    <i data-lucide="check-circle-2" class="w-10 h-10 text-green-500 mb-2"></i>
+                    <p>Tidak ada error SQL atau Exception yang tertangkap.</p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <script>
+        function toggleDebugger() {
+            const panel = document.getElementById('debugPanel');
+            if (panel.classList.contains('translate-y-full')) {
+                panel.classList.remove('translate-y-full');
+                panel.classList.add('translate-y-0');
+            } else {
+                panel.classList.remove('translate-y-0');
+                panel.classList.add('translate-y-full');
+            }
+        }
+        
+        // Auto-buka debugger jika ada error setelah reload
+        <?php if (!empty($debug_error)): ?>
+            setTimeout(() => { toggleDebugger(); }, 500);
+        <?php endif; ?>
+    </script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 <script>
