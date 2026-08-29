@@ -12,12 +12,13 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
+// Waktu DATETIME berdasarkan timezone tenant
 $current_time = date('Y-m-d H:i:s');
 
 // Ambil Sisa Cuti User
 $curr_year = date('Y');
-$stmtQuota = $pdo->prepare("SELECT total_quota, used_quota FROM leave_balances WHERE user_id = ? AND year = ?");
-$stmtQuota->execute([$user_id, $curr_year]);
+$stmtQuota = $pdo->prepare("SELECT total_quota, used_quota FROM leave_balances WHERE user_id = ? AND year = ? AND tenant_id = ?");
+$stmtQuota->execute([$user_id, $curr_year, $tenant_id]);
 $quotaData = $stmtQuota->fetch(PDO::FETCH_ASSOC);
 $total_quota = (int)($quotaData['total_quota'] ?? 12);
 $used_quota = (int)($quotaData['used_quota'] ?? 0);
@@ -80,7 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         try {
             $attachment = null;
             if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                // Cek ukuran maks 10MB
                 if ($_FILES['attachment']['size'] > 10 * 1024 * 1024) {
                     throw new Exception("Ukuran file maksimal 10MB!");
                 }
@@ -98,7 +98,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 }
 
                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                    // Kompres & Ubah Format ke .PNG (Maks 200KB)
                     $attachment = 'leave_' . $user_id . '_' . time() . '.png';
                     $targetPath = $upload_dir . $attachment;
                     
@@ -121,7 +120,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                         $width = imagesx($srcImage);
                         $height = imagesy($srcImage);
                         
-                        // Scale down jika ukuran dimensi terlalu besar
                         $maxDim = 1200;
                         if ($width > $maxDim || $height > $maxDim) {
                             $ratio = min($maxDim / $width, $maxDim / $height);
@@ -135,11 +133,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                             $srcImage = $resized;
                         }
 
-                        // Simpan awal sebagai PNG dengan kompresi maksimal
                         imagepng($srcImage, $targetPath, 9);
                         imagedestroy($srcImage);
 
-                        // Iterasi kompresi ulang dimensi jika file size > 200KB
                         while (filesize($targetPath) > 200 * 1024) {
                             $srcImg2 = imagecreatefrompng($targetPath);
                             if (!$srcImg2) break;
@@ -157,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                     } else {
                         move_uploaded_file($_FILES['attachment']['tmp_name'], $targetPath);
                     }
-                } else { // File PDF
+                } else { 
                     $attachment = 'leave_' . $user_id . '_' . time() . '.pdf';
                     move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . $attachment);
                 }
@@ -165,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 throw new Exception("Surat dokter wajib diunggah!");
             }
 
+            // Insert Data dengan kolom waktu DATETIME eksplisit sesuai timezone tenant
             $stmt = $pdo->prepare("
                 INSERT INTO leave_requests (tenant_id, user_id, type, start_date, end_date, total_days, reason, attachment, status, approved_by, approved_at, created_at, updated_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -173,9 +170,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 
             if ($status === 'approved' && $type === 'cuti') {
                 $year = date('Y', strtotime($start_date));
-                // Update quota dan waktu pada tabel balances
-                $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ?")
-                    ->execute([$total_days, $current_time, $user_id, $year]);
+                // Update quota dan waktu updated_at pada tabel balances
+                $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
+                    ->execute([$total_days, $current_time, $user_id, $year, $tenant_id]);
             }
 
             $type_label = ucfirst($type);

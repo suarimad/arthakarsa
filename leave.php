@@ -12,7 +12,7 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
-// Generate waktu saat ini berdasarkan timezone tenant
+// Generate waktu DATETIME saat ini berdasarkan timezone tenant
 $current_time = date('Y-m-d H:i:s');
 
 // ==============================================================================
@@ -86,15 +86,15 @@ if (isset($_REQUEST['ajax_action'])) {
                     if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
                         $pdo->beginTransaction();
 
-                        // Soft Delete Data Pengajuan (Gunakan Datetime eksplisit)
-                        $pdo->prepare("UPDATE leave_requests SET deleted_at = ?, updated_at = ? WHERE id = ?")
-                            ->execute([$current_time, $current_time, $id]);
+                        // Soft Delete Data Pengajuan (Gunakan Datetime dari timezone tenant)
+                        $pdo->prepare("UPDATE leave_requests SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
+                            ->execute([$current_time, $current_time, $id, $tenant_id]);
 
                         // Jika pengajuan sudah approved & berjenis 'cuti', kembalikan kuota cuti user
                         if ($req['status'] === 'approved' && strtolower($req['type']) === 'cuti') {
                             $year = date('Y', strtotime($req['start_date']));
-                            $pdo->prepare("UPDATE leave_balances SET used_quota = GREATEST(0, used_quota - ?) WHERE user_id = ? AND year = ?")
-                                ->execute([(int)$req['total_days'], $req['user_id'], $year]);
+                            $pdo->prepare("UPDATE leave_balances SET used_quota = GREATEST(0, used_quota - ?), updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
+                                ->execute([(int)$req['total_days'], $current_time, $req['user_id'], $year, $tenant_id]);
                         }
 
                         $pdo->commit();
@@ -118,19 +118,19 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
-                // Update status dengan parameter Datetime eksplisit
+                // Update status dengan Datetime eksplisit sesuai timezone tenant
                 $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
                     ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
 
                 if ($action === 'approve') {
-                    $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ?");
-                    $stmtInfo->execute([$id]);
+                    $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ? AND tenant_id = ?");
+                    $stmtInfo->execute([$id, $tenant_id]);
                     $info = $stmtInfo->fetch();
                     
                     if ($info && strtolower($info['type']) === 'cuti') {
                         $year = date('Y', strtotime($info['start_date']));
-                        $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ? WHERE user_id = ? AND year = ?")
-                            ->execute([(int)$info['total_days'], $info['user_id'], $year]);
+                        $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
+                            ->execute([(int)$info['total_days'], $current_time, $info['user_id'], $year, $tenant_id]);
                     }
                 }
 

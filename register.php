@@ -17,7 +17,7 @@ if (isset($_SESSION['user_id'])) {
     <!-- Meta Data & Favicon dari app_settings -->
     <title>Daftar Perusahaan - <?= htmlspecialchars($app_settings['app_name'] ?? 'HRIS') ?></title>
     <meta name="description" content="Pendaftaran Tenant Baru <?= htmlspecialchars($app_settings['app_name'] ?? 'HRIS') ?>">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#f3f4f6">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="icon" type="image/png" href="<?= $logo_path . ($app_settings['favicon'] ?? 'default_favicon.png') ?>">
     <link rel="apple-touch-icon" href="<?= $logo_path . ($app_settings['pwa_icon_192'] ?? 'icon-192.png') ?>">
