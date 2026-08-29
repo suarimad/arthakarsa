@@ -3,11 +3,14 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
-// Set Timezone ke Asia/Jakarta
-date_default_timezone_set('Asia/Jakarta');
-
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
+
+// Ambil Timezone dari tenant_settings
+$stmtTS = $pdo->prepare("SELECT timezone FROM tenant_settings WHERE tenant_id = ?");
+$stmtTS->execute([$tenant_id]);
+$tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
+date_default_timezone_set($tz_setting);
 
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
@@ -19,30 +22,26 @@ $is_employee = ($role_id == 5 || $role_name_session === 'employee');
 // PENANGANAN FORM SUBMIT VIA AJAX
 // ==============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'submit_overtime') {
-    header('Content-Type: application/json'); // Wajib JSON untuk AJAX
+    header('Content-Type: application/json');
     
-    // Menggabungkan Input Tanggal Terpisah menjadi Format YYYY-MM-DD
     $ot_date = sprintf('%04d-%02d-%02d', $_POST['ot_year'], $_POST['ot_month'], $_POST['ot_day']);
-    
     $start_time = $_POST['start_time'] ?? '';
     $end_time = $_POST['end_time'] ?? '';
     $duration_minutes = (int)($_POST['duration_minutes'] ?? 0);
     $reason = trim($_POST['reason'] ?? '');
     
-    // Status ditentukan oleh Role
     $status = $is_employee ? 'pending' : 'approved';
-    
     $approved_by = null;
     $approved_at = null;
     
     if ($status === 'approved') {
-        $approved_by = $user_id; // Disetujui otomatis oleh diri sendiri (Admin/HR/Manager)
+        $approved_by = $user_id;
         $approved_at = date('Y-m-d H:i:s');
     }
 
     $today = date('Y-m-d');
 
-    // Validasi Tanggal (Tidak Boleh Lampau & Validitas Data)
+    // Validasi Tanggal & Form
     if (!checkdate((int)$_POST['ot_month'], (int)$_POST['ot_day'], (int)$_POST['ot_year'])) {
         echo json_encode(['status' => 'error', 'message' => 'Format tanggal yang Anda masukkan tidak valid!']);
         exit;
@@ -60,23 +59,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         exit;
     } else {
         try {
-            // Upload Lampiran via Dropify (Opsional untuk Lembur)
             $attachment = null;
             if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                // Path direktori overtime_requests
+                // Cek ukuran maks 10MB
+                if ($_FILES['attachment']['size'] > 10 * 1024 * 1024) {
+                    throw new Exception("Ukuran file maksimal 10MB!");
+                }
+
                 $upload_dir = __DIR__ . '/assets/img/overtime_requests/';
                 if (!is_dir($upload_dir)) {
                     mkdir($upload_dir, 0777, true);
                 }
                 
                 $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'];
+                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
                 
-                if (in_array($ext, $allowed_ext)) {
-                    $attachment = 'ot_' . $user_id . '_' . time() . '.' . $ext;
+                if (!in_array($ext, $allowed_ext)) {
+                    throw new Exception("File wajib PDF atau Gambar!");
+                }
+
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                    // Kompres & Ubah Format ke .PNG (Maks 200KB)
+                    $attachment = 'ot_' . $user_id . '_' . time() . '.png';
+                    $targetPath = $upload_dir . $attachment;
+                    
+                    switch ($ext) {
+                        case 'jpg':
+                        case 'jpeg':
+                            $srcImage = @imagecreatefromjpeg($_FILES['attachment']['tmp_name']);
+                            break;
+                        case 'png':
+                            $srcImage = @imagecreatefrompng($_FILES['attachment']['tmp_name']);
+                            break;
+                        case 'webp':
+                            $srcImage = @imagecreatefromwebp($_FILES['attachment']['tmp_name']);
+                            break;
+                        default:
+                            $srcImage = false;
+                    }
+
+                    if ($srcImage) {
+                        $width = imagesx($srcImage);
+                        $height = imagesy($srcImage);
+                        
+                        $maxDim = 1200;
+                        if ($width > $maxDim || $height > $maxDim) {
+                            $ratio = min($maxDim / $width, $maxDim / $height);
+                            $newW = (int)($width * $ratio);
+                            $newH = (int)($height * $ratio);
+                            $resized = imagecreatetruecolor($newW, $newH);
+                            imagealphablending($resized, false);
+                            imagesavealpha($resized, true);
+                            imagecopyresampled($resized, $srcImage, 0, 0, 0, 0, $newW, $newH, $width, $height);
+                            imagedestroy($srcImage);
+                            $srcImage = $resized;
+                        }
+
+                        // Simpan awal sebagai PNG dengan kompresi maksimal
+                        imagepng($srcImage, $targetPath, 9);
+                        imagedestroy($srcImage);
+
+                        // Iterasi kompresi ulang dimensi jika file size > 200KB
+                        while (filesize($targetPath) > 200 * 1024) {
+                            $srcImg2 = imagecreatefrompng($targetPath);
+                            if (!$srcImg2) break;
+                            $w2 = (int)(imagesx($srcImg2) * 0.8);
+                            $h2 = (int)(imagesy($srcImg2) * 0.8);
+                            if ($w2 < 100 || $h2 < 100) { imagedestroy($srcImg2); break; }
+                            $resizedImg2 = imagecreatetruecolor($w2, $h2);
+                            imagealphablending($resizedImg2, false);
+                            imagesavealpha($resizedImg2, true);
+                            imagecopyresampled($resizedImg2, $srcImg2, 0, 0, 0, 0, $w2, $h2, imagesx($srcImg2), imagesy($srcImg2));
+                            imagepng($resizedImg2, $targetPath, 9);
+                            imagedestroy($srcImg2);
+                            imagedestroy($resizedImg2);
+                        }
+                    } else {
+                        move_uploaded_file($_FILES['attachment']['tmp_name'], $targetPath);
+                    }
+                } else { // File PDF
+                    $attachment = 'ot_' . $user_id . '_' . time() . '.pdf';
                     move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . $attachment);
-                } else {
-                    throw new Exception("Format file lampiran tidak valid. Gunakan ekstensi PDF atau Gambar.");
                 }
             }
 
@@ -89,16 +152,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 
             $msg = "Berhasil mengajukan lembur" . ($status === 'approved' ? " (Otomatis disetujui)." : ".");
             
-            // Simpan pesan ke session untuk dikirim ke halaman overtime.php
             $_SESSION['toast_msg'] = $msg;
             $_SESSION['toast_type'] = "success";
             
-            // Response sukses ke AJAX
             echo json_encode(['status' => 'success']);
             exit;
 
         } catch (Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => 'Gagal memproses: ' . $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
             exit;
         }
     }
@@ -108,17 +169,12 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan';
 
-// Helper Tanggal Hari Ini untuk Form Default
 $curr_d = date('d');
 $curr_m = date('m');
 $curr_y = date('Y');
 
-// Prefix Teks Tombol Berdasarkan Role
-$btn_submit_text = $is_employee ? "Ajukan Lembur" : "Buat Lembur";
-
 require_once __DIR__ . '/components/head.php';
 
-// Memuat jQuery & Dropify
 echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/css/dropify.min.css" />';
 echo '<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>';
 echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/js/dropify.min.js"></script>';
@@ -136,6 +192,14 @@ require_once __DIR__ . '/components/sidebar.php';
         background-image: linear-gradient(-45deg, #f9fafb 25%, transparent 25%, transparent 50%, #f9fafb 50%, #f9fafb 75%, transparent 75%, transparent);
     }
 </style>
+
+<!-- OVERLAY LOADING SAAT SUBMIT -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm hidden flex items-center justify-center" style="z-index: 999999;">
+    <div class="bg-surface p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-3">
+        <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i>
+        <p class="text-xs font-bold text-gray-800">Memproses Pengajuan...</p>
+    </div>
+</div>
 
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
     <main class="w-full min-h-screen pb-24 md:pb-8 md:px-6">
@@ -221,18 +285,18 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
                                     Bukti Lampiran / Foto <span class="text-gray-400 lowercase font-medium">(Opsional)</span>
                                 </label>
-                                <input type="file" name="attachment" id="attachment" class="dropify" data-max-file-size="3M" data-allowed-file-extensions="pdf jpg jpeg png webp gif" />
-                                <p class="text-[9px] text-gray-400 mt-1.5">Format didukung: PDF, JPG, PNG, dll. Maks 3MB.</p>
+                                <input type="file" name="attachment" id="attachment" class="dropify" data-max-file-size="10M" data-allowed-file-extensions="pdf jpg jpeg png webp" />
+                                <p class="text-[9px] text-gray-400 mt-1.5">Format didukung: PDF & Gambar (Maks 10MB).</p>
                             </div>
                         </div>
                     </div>
 
                     <div class="mt-8 pt-6 mb-12 md:mb-2 border-t border-gray-100 flex gap-3">
-                        <a href="<?= $base_url ?? '' ?>/overtime" id="btnCancel" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition flex items-center justify-center">
+                        <a href="<?= $base_url ?? '' ?>/overtime" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition flex items-center justify-center">
                             Batal
                         </a>
-                        <button type="submit" id="btnSubmitForm" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
-                            <i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText"><?= $btn_submit_text ?></span>
+                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
+                            <i data-lucide="send" class="w-4 h-4"></i> <span>Simpan</span>
                         </button>
                     </div>
                 </form>
@@ -247,23 +311,17 @@ require_once __DIR__ . '/components/sidebar.php';
 <script>
     lucide.createIcons();
 
-    // ==========================================
-    // INISIALISASI DROPIFY
-    // ==========================================
     $(document).ready(function(){
         $('.dropify').dropify({
             messages: {
                 'default': '',
                 'replace': '',
                 'remove':  'Hapus',
-                'error':   'Ooops, terjadi kesalahan.'
+                'error':   'File tidak valid.'
             }
         });
     });
 
-    // ==========================================
-    // LOGIKA KALKULASI DURASI LEMBUR (DALAM MENIT & JAM)
-    // ==========================================
     function calculateDuration() {
         const st = document.getElementById('start_time').value;
         const et = document.getElementById('end_time').value;
@@ -292,16 +350,12 @@ require_once __DIR__ . '/components/sidebar.php';
             if (diffMinutes === 0) displayStr = "0 Menit";
             
             displayInput.value = displayStr.trim();
-            
         } else {
             minValInput.value = "0";
             displayInput.value = "";
         }
     }
     
-    // ==========================================
-    // AJAX FORM SUBMIT + DELAY REDIRECT
-    // ==========================================
     $('#overtimeForm').on('submit', function(e) {
         e.preventDefault();
         
@@ -315,19 +369,11 @@ require_once __DIR__ . '/components/sidebar.php';
             return false;
         }
 
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+
         const formData = new FormData(this);
         formData.append('ajax_action', 'submit_overtime');
 
-        const btnSubmit = $('#btnSubmitForm');
-        const btnText = $('#btnSubmitText');
-        const originalText = btnText.text();
-        
-        btnSubmit.prop('disabled', true);
-        btnSubmit.html('<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...');
-        $('#btnCancel').addClass('pointer-events-none opacity-50');
-        lucide.createIcons();
-
-        // Menggunakan target window.location.href agar aman dari intercept Service Worker PWA
         fetch(window.location.href, {
             method: 'POST',
             body: formData
@@ -335,29 +381,15 @@ require_once __DIR__ . '/components/sidebar.php';
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                btnSubmit.html('<i data-lucide="check-circle" class="w-4 h-4"></i> Berhasil, Mengalihkan...');
-                lucide.createIcons();
-                
-                // Redirect ke halaman overtime (Toast dibaca otomatis oleh overtime.php)
-                setTimeout(() => {
-                    window.location.href = '<?= $base_url ?? '' ?>/overtime';
-                }, 500);
+                window.location.href = '<?= $base_url ?? '' ?>/overtime';
             } else {
+                document.getElementById('loadingOverlay').classList.add('hidden');
                 if(typeof window.showToast === 'function') window.showToast(data.message, "error");
-                
-                btnSubmit.prop('disabled', false);
-                btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
-                $('#btnCancel').removeClass('pointer-events-none opacity-50');
-                lucide.createIcons();
             }
         })
         .catch(error => {
+            document.getElementById('loadingOverlay').classList.add('hidden');
             if(typeof window.showToast === 'function') window.showToast("Gagal terhubung ke server.", "error");
-            
-            btnSubmit.prop('disabled', false);
-            btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
-            $('#btnCancel').removeClass('pointer-events-none opacity-50');
-            lucide.createIcons();
         });
     });
 

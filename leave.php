@@ -33,7 +33,6 @@ if (isset($_REQUEST['ajax_action'])) {
         if ($action === 'view') {
             $id = $_REQUEST['id'];
             
-            // Query dimodifikasi untuk mendapatkan data kuota dari leave_balances
             $query = "
                 SELECT lr.*, u.name as employee_name, d.name as department_name, a.name as approver_name,
                        COALESCE(lb.total_quota, 0) as total_quota, COALESCE(lb.used_quota, 0) as used_quota
@@ -68,20 +67,36 @@ if (isset($_REQUEST['ajax_action'])) {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = $_POST['id'];
 
-            // PROSES DELETE (SOFT DELETE)
+            // PROSES DELETE (SOFT DELETE + PENGEMBALIAN KUOTA CUTI)
             if ($action === 'delete') {
-                $stmt = $pdo->prepare("SELECT user_id, status FROM leave_requests WHERE id = ?");
-                $stmt->execute([$id]);
-                $req = $stmt->fetch();
+                $stmt = $pdo->prepare("SELECT user_id, status, type, total_days, start_date FROM leave_requests WHERE id = ? AND tenant_id = ?");
+                $stmt->execute([$id, $tenant_id]);
+                $req = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                // Bisa hapus jika: Can_delete_all (Admin/HR) ATAU (Milik sendiri DAN status pending)
-                if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
-                    $pdo->prepare("UPDATE leave_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
-                    $_SESSION['toast_msg'] = "Data pengajuan berhasil dihapus.";
-                    $_SESSION['toast_type'] = "success";
-                    echo json_encode(['status' => 'success']);
+                if ($req) {
+                    if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
+                        $pdo->beginTransaction();
+
+                        // Soft Delete Data Pengajuan
+                        $pdo->prepare("UPDATE leave_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
+
+                        // Jika pengajuan sudah approved & berjenis 'cuti', kembalikan kuota cuti user
+                        if ($req['status'] === 'approved' && strtolower($req['type']) === 'cuti') {
+                            $year = date('Y', strtotime($req['start_date']));
+                            $pdo->prepare("UPDATE leave_balances SET used_quota = GREATEST(0, used_quota - ?) WHERE user_id = ? AND year = ?")
+                                ->execute([(int)$req['total_days'], $req['user_id'], $year]);
+                        }
+
+                        $pdo->commit();
+
+                        $_SESSION['toast_msg'] = "Data dihapus.";
+                        $_SESSION['toast_type'] = "success";
+                        echo json_encode(['status' => 'success']);
+                    } else {
+                        echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki hak untuk menghapus data ini.']);
+                    }
                 } else {
-                    echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki hak untuk menghapus data ini.']);
+                    echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan.']);
                 }
                 exit;
             }
@@ -93,10 +108,9 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
-                $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_note = ? WHERE id = ?")
-                    ->execute([$status, $user_id, $note, $id]);
+                $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_note = ? WHERE id = ? AND tenant_id = ?")
+                    ->execute([$status, $user_id, $note, $id, $tenant_id]);
 
-                // Pemotongan Kuota Cuti (Otomatis jika Cuti & Approved)
                 if ($action === 'approve') {
                     $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ?");
                     $stmtInfo->execute([$id]);
@@ -105,7 +119,7 @@ if (isset($_REQUEST['ajax_action'])) {
                     if ($info && strtolower($info['type']) === 'cuti') {
                         $year = date('Y', strtotime($info['start_date']));
                         $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ? WHERE user_id = ? AND year = ?")
-                            ->execute([$info['total_days'], $info['user_id'], $year]);
+                            ->execute([(int)$info['total_days'], $info['user_id'], $year]);
                     }
                 }
 
@@ -116,6 +130,7 @@ if (isset($_REQUEST['ajax_action'])) {
             }
         }
     } catch (Exception $e) {
+        if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         exit;
     }
@@ -126,7 +141,7 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// MENGAMBIL DATA PENGAJUAN UNTUK DATATABLES (Termasuk Data Kuota)
+// MENGAMBIL DATA PENGAJUAN UNTUK DATATABLES
 $base_query = "
     SELECT lr.*, u.name as employee_name, u.avatar, d.name as department_name,
            COALESCE(lb.total_quota, 0) as total_quota, COALESCE(lb.used_quota, 0) as used_quota
@@ -142,7 +157,6 @@ if ($can_view_all) {
     $stmt = $pdo->prepare($base_query . " ORDER BY lr.created_at DESC");
     $stmt->execute([$tenant_id]);
 } else {
-    // Employee hanya bisa melihat miliknya sendiri
     $stmt = $pdo->prepare($base_query . " AND lr.user_id = ? ORDER BY lr.created_at DESC");
     $stmt->execute([$tenant_id, $user_id]);
 }
@@ -155,7 +169,6 @@ echo '<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>';
 echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>';
 ?>
 
-<!-- STYLE CUSTOM UNTUK MENYATUKAN DATATABLES DENGAN DESAIN TAILWIND & FIX TOAST -->
 <style>
     table.dataTable.no-footer { border-bottom: none !important; }
     table.dataTable thead th { border-bottom: 1px solid #f3f4f6 !important; padding: 0.75rem 1rem !important; background-color: #f9fafb; background-image: none !important; }
@@ -168,7 +181,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     .dataTables_paginate .paginate_button.current { background: #ea3800 !important; color: white !important; border-color: #ea3800 !important; }
     .dataTables_paginate .paginate_button.disabled { opacity: 0.5; cursor: not-allowed; }
     
-    /* Mencegah toast tertutup overlay modal (Memaksa z-index tertinggi) */
     div[id*="toast"], div[class*="toast"], #toast-container {
         z-index: 999999 !important;
     }
@@ -188,13 +200,11 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Pengajuan Izin & Cuti</h2>
                     <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan cuti, izin, dan sakit</p>
                 </div>
-                <!-- TOMBOL AJUKAN IZIN -->
                 <a href="leave_add" class="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
                     <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Ajukan Izin</span>
                 </a>
             </div>
 
-            <!-- Form Pencarian (Terikat dengan DataTables via JS) -->
             <div class="relative z-0">
                 <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 <input type="text" id="dtSearchInput" placeholder="Cari nama karyawan, jenis, atau status..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
@@ -222,22 +232,18 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             $dept_name = htmlspecialchars($lr['department_name'] ?? '-');
                                             $avatar = !empty($lr['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($lr['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
                                             
-                                            // Format Tanggal
                                             $start = date('d M Y', strtotime($lr['start_date']));
                                             $end = date('d M Y', strtotime($lr['end_date']));
                                             $date_range = ($start === $end) ? $start : "$start - $end";
                                             
-                                            // Kalkulasi sisa cuti untuk kebutuhan parameter alert modal
                                             $sisa_cuti = $lr['total_quota'] - $lr['used_quota'];
                                             
-                                            // Tipe Icon & Warna
                                             $type = strtolower($lr['type']);
                                             $type_icon = 'file-text'; $type_color = 'text-gray-600';
                                             if ($type === 'cuti') { $type_icon = 'calendar-off'; $type_color = 'text-primary'; }
                                             if ($type === 'izin') { $type_icon = 'user-minus'; $type_color = 'text-blue-500'; }
                                             if ($type === 'sakit') { $type_icon = 'stethoscope'; $type_color = 'text-pending'; }
 
-                                            // Status Badge
                                             $status = strtolower($lr['status']);
                                             $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Unknown';
                                             if ($status === 'pending') { $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu'; }
@@ -246,7 +252,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             if ($status === 'canceled') { $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Dibatalkan'; }
                                         ?>
                                             <tr class="hover:bg-gray-50/50 transition-colors group">
-                                                <!-- Kolom Karyawan -->
                                                 <td>
                                                     <div class="flex items-center gap-3">
                                                         <div class="w-9 h-9 rounded-full bg-gray-100 shrink-0 overflow-hidden border border-gray-200">
@@ -259,7 +264,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                     </div>
                                                 </td>
                                                 
-                                                <!-- Kolom Pengajuan -->
                                                 <td>
                                                     <div class="flex flex-col gap-1 items-start">
                                                         <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5 capitalize"><i data-lucide="<?= $type_icon ?>" class="w-3.5 h-3.5 <?= $type_color ?>"></i> <?= $type ?></span>
@@ -267,20 +271,16 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                     </div>
                                                 </td>
 
-                                                <!-- Kolom Total Hari -->
                                                 <td class="text-center">
                                                     <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-md"><?= $lr['total_days'] ?> Hari</span>
                                                 </td>
                                                 
-                                                <!-- Kolom Status -->
                                                 <td>
                                                     <span class="text-[9px] font-bold px-2 py-1 rounded-md <?= $badge_bg ?> <?= $badge_text ?>"><?= $badge_label ?></span>
                                                 </td>
                                                 
-                                                <!-- Kolom Aksi -->
                                                 <td class="text-right">
                                                     <div class="flex items-center justify-end gap-1.5">
-                                                        
                                                         <button onclick="openViewModal(<?= $lr['id'] ?>)" class="p-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-primary hover:text-white transition shadow-sm active:scale-95" title="Lihat Detail">
                                                             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                                         </button>
@@ -346,9 +346,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                 <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
             
-            <div id="confirmContent">
-                <!-- Konten dinamis di-inject via JavaScript -->
-            </div>
+            <div id="confirmContent"></div>
         </div>
     </div>
 </div>
@@ -361,12 +359,8 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
 <script>
     lucide.createIcons();
 
-    // Variabel global hak persetujuan untuk JS Modal
     const canApprove = <?= $can_approve ? 'true' : 'false' ?>;
 
-    // ==========================================
-    // INIT DATATABLES JS & BIND SEARCH INPUT
-    // ==========================================
     $(document).ready(function() {
         const table = $('#leaveTable').DataTable({
             "dom": 't<"bottom"ip>', 
@@ -392,9 +386,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         });
     });
 
-    // ==========================================
-    // HYBRID MODAL AJAX (VIEW DETAIL PENGJUAN)
-    // ==========================================
     const crudModal = document.getElementById('crudModal');
     const crudOverlay = document.getElementById('crudOverlay');
     const crudCard = document.getElementById('crudCard');
@@ -419,7 +410,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             crudCard.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
         }, 10);
 
-        // Fetch Menggunakan FormData dan POST (Menghindari Service Worker Cache Error)
         const fd = new FormData();
         fd.append('ajax_action', 'view');
         fd.append('id', id);
@@ -430,7 +420,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                 if(res.status === 'success') {
                     const data = res.data;
                     
-                    // Format Date Helper
                     const formatDate = (dateStr) => {
                         const d = new Date(dateStr);
                         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -445,6 +434,14 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
 
                     const remainingQuota = data.total_quota - data.used_quota;
 
+                    // STATUS BADGE DI MODAL DETAIL
+                    let statusBadge = '';
+                    const st = (data.status || '').toLowerCase();
+                    if (st === 'pending') statusBadge = '<span class="px-2.5 py-1 bg-pending/10 text-pending font-bold text-[10px] rounded-md uppercase tracking-wider">Menunggu</span>';
+                    else if (st === 'approved') statusBadge = '<span class="px-2.5 py-1 bg-success/10 text-success font-bold text-[10px] rounded-md uppercase tracking-wider">Disetujui</span>';
+                    else if (st === 'rejected') statusBadge = '<span class="px-2.5 py-1 bg-failed/10 text-failed font-bold text-[10px] rounded-md uppercase tracking-wider">Ditolak</span>';
+                    else if (st === 'canceled') statusBadge = '<span class="px-2.5 py-1 bg-gray-100 text-gray-500 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibatalkan</span>';
+
                     let actionButtons = '';
                     if (canApprove && data.status === 'pending') {
                         actionButtons = `
@@ -455,7 +452,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         `;
                     }
 
-                    // Tampilan Peringatan Info Kuota Cuti (Hanya jika Cuti & Approval)
                     let quotaHtml = `
                         <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center ${(!canApprove || data.type.toLowerCase() !== 'cuti') ? 'col-span-2' : ''}">
                             <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Hari</p>
@@ -493,6 +489,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         <div class="text-center mb-6 mt-2 md:mt-0">
                             <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Pengajuan ${typeLabel}</h3>
                             <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
+                            <div class="mt-3">${statusBadge}</div>
                         </div>
                         
                         <div class="space-y-4">
@@ -542,9 +539,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         setTimeout(() => { crudModal.classList.add('hidden'); }, 300);
     }
 
-    // ==========================================
-    // LOGIKA MODAL KONFIRMASI (APPROVE/REJECT/DELETE)
-    // ==========================================
     const confirmModal = document.getElementById('confirmModal');
     const confirmOverlay = document.getElementById('confirmOverlay');
     const confirmCard = document.getElementById('confirmCard');
@@ -552,10 +546,8 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     document.body.appendChild(confirmModal);
 
     window.openConfirmModal = function(id, action, type = '', requestedDays = 0, remainingQuota = 0) {
-        // Tutup modal detail terlebih dahulu (jika sedang terbuka)
         closeCrud();
         
-        // Tunggu animasi tutup selesai baru buka modal konfirmasi
         setTimeout(() => {
             let title = action === 'approve' ? 'Konfirmasi Persetujuan' : 'Konfirmasi Penolakan';
             let desc = action === 'approve' ? 'Apakah Anda yakin ingin menyetujui pengajuan ini?' : 'Apakah Anda yakin ingin menolak pengajuan ini?';
@@ -564,7 +556,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             let btnClass = action === 'approve' ? 'bg-success hover:bg-success/90' : 'bg-failed hover:bg-failed/90';
             let btnText = action === 'approve' ? 'Ya, Setujui' : 'Ya, Tolak';
 
-            // Peringatan jika melebihi kuota
             if (action === 'approve' && type.toLowerCase() === 'cuti' && requestedDays > remainingQuota) {
                 iconClass = 'bg-pending/10 text-pending';
                 iconType = 'alert-triangle';
@@ -645,15 +636,11 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             const noteInput = document.getElementById('rejectionNote');
             note = noteInput.value.trim();
             
-            // Handle validasi jika note kosong
             if (!note) {
                 if(typeof window.showToast === 'function') window.showToast('Alasan penolakan wajib diisi!', 'warning');
-                
-                // Berikan efek visual/getar pada kolom input
                 noteInput.classList.add('border-failed', 'ring-failed', 'bg-failed/5');
                 noteInput.focus();
                 
-                // Pastikan toast memaksa naik ke atas via JS just in case CSS teroverride
                 setTimeout(() => {
                     document.querySelectorAll('div').forEach(t => {
                         if(t.id.toLowerCase().includes('toast') || t.className.toLowerCase().includes('toast')) {
@@ -671,7 +658,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         formData.append('id', id);
         if (note) formData.append('note', note);
 
-        // Fetch Menggunakan window.location.href untuk mencegah Service Worker Error
         fetch(window.location.href, { method: 'POST', body: formData })
         .then(res => res.json())
         .then(res => {

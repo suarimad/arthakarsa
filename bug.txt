@@ -1,0 +1,40 @@
+Leave.php
+- tampilkan status pada modal detail
+- Toast Hapus data terlalu panjang
+
+
+- toast error leave_add terlalu panjang
+- saat user memilih tanggal mulai, tangal selesai mengikuti tanggal mulai yang dipilih otomatis
+- Tampilkan Sisa cuti user terkait saat pengajuan, tampilkan konfirmasi jika total cuti melebihi sisa cuti.
+- tampilkan overlay loading saat proses submit , button Ajukan cuti tidak usah dibuat dinamis teksnya
+- gunakan timezone dari table tenant_settings kolom timezone saat submit data
+- pastikan lampiran hanya boleh menggunakan pdf, dan foto saja.
+- buat maksimal file upload 10MB
+- jika file yang diupload adalah gambar compress gambarnya hingga dibawah 200kb dan ubah formatnya menjadi .png
+
+
+Overtime
+- toast hapus terlalu panjang
+- tampilkan status pada modal detail
+
+
+overtime_add 
+- tampilkan overlay loading saat proses submit , button Ajukan cuti tidak usah dibuat dinamis teksnya
+- gunakan timezone dari table tenant_settings kolom timezone saat submit data
+- pastikan lampiran hanya boleh menggunakan pdf, dan foto saja.
+- buat maksimal file upload 10MB
+- jika file yang diupload adalah gambar compress gambarnya hingga dibawah 200kb dan ubah formatnya menjadi .png
+
+reimbursement
+- toast hapus terlalu panjang
+- tampilkan status pada modal detail
+
+reimbursement_add
+- pesan toast ke reimbursement.php teralu panjang.
+- gunakan timezone dari table tenant_settings kolom timezone saat submit data
+- pastikan lampiran hanya boleh menggunakan pdf, dan foto saja.
+- buat maksimal file upload 10MB
+- jika file yang diupload adalah gambar compress gambarnya hingga dibawah 200kb dan ubah formatnya menjadi .png
+
+
+

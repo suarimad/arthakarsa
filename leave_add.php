@@ -3,121 +3,189 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
-// Set Timezone ke Asia/Jakarta
-date_default_timezone_set('Asia/Jakarta');
-
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
+
+// Ambil Timezone dari tenant_settings
+$stmtTS = $pdo->prepare("SELECT timezone FROM tenant_settings WHERE tenant_id = ?");
+$stmtTS->execute([$tenant_id]);
+$tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
+date_default_timezone_set($tz_setting);
+
+// Ambil Sisa Cuti User
+$curr_year = date('Y');
+$stmtQuota = $pdo->prepare("SELECT total_quota, used_quota FROM leave_balances WHERE user_id = ? AND year = ?");
+$stmtQuota->execute([$user_id, $curr_year]);
+$quotaData = $stmtQuota->fetch(PDO::FETCH_ASSOC);
+$total_quota = (int)($quotaData['total_quota'] ?? 12);
+$used_quota = (int)($quotaData['used_quota'] ?? 0);
+$sisa_cuti = max(0, $total_quota - $used_quota);
 
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
 
-// Logika Status & Tombol (Karyawan vs Atasan)
 $is_employee = ($role_id == 5 || $role_name_session === 'employee');
 
-// Menangkap parameter type dari URL (Misal: ?type=sakit atau hasil rewrite URL leave_add/sakit)
 $type_param = $_GET['type'] ?? ''; 
 $allowed_types = ['cuti', 'izin', 'sakit'];
 if (!in_array(strtolower($type_param), $allowed_types)) {
-    $type_param = 'cuti'; // Default jika parameter kosong/salah
+    $type_param = 'cuti';
 } else {
     $type_param = strtolower($type_param);
 }
 
 // ==============================================================================
-// PENANGANAN FORM SUBMIT (VIA AJAX)
+// PENANGANAN FORM SUBMIT VIA AJAX
 // ==============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'submit_leave') {
-    header('Content-Type: application/json'); // Wajib return JSON untuk AJAX
+    header('Content-Type: application/json');
     
     $type = $_POST['type'] ?? 'cuti';
     
-    // Menggabungkan Input Tanggal Terpisah menjadi Format YYYY-MM-DD
     $start_date = sprintf('%04d-%02d-%02d', $_POST['start_year'], $_POST['start_month'], $_POST['start_day']);
     $end_date = sprintf('%04d-%02d-%02d', $_POST['end_year'], $_POST['end_month'], $_POST['end_day']);
     
-    // Konversi ke Integer untuk keamanan database
     $total_days = isset($_POST['total_days']) ? (int)$_POST['total_days'] : 0;
     $reason = trim($_POST['reason'] ?? '');
     
-    // Status ditentukan oleh Role
     $status = $is_employee ? 'pending' : 'approved';
     
     $approved_by = null;
     $approved_at = null;
     
     if ($status === 'approved') {
-        $approved_by = $user_id; // Disetujui otomatis oleh diri sendiri (Admin/HR/Manager)
+        $approved_by = $user_id;
         $approved_at = date('Y-m-d H:i:s');
     }
 
     $today = date('Y-m-d');
 
-    // Validasi Tanggal (Tidak Boleh Lampau & Tanggal Harus Valid)
+    // Validasi Ringkas
     if (!checkdate((int)$_POST['start_month'], (int)$_POST['start_day'], (int)$_POST['start_year']) ||
         !checkdate((int)$_POST['end_month'], (int)$_POST['end_day'], (int)$_POST['end_year'])) {
-        echo json_encode(['status' => 'error', 'message' => 'Format tanggal yang Anda masukkan tidak valid!']);
+        echo json_encode(['status' => 'error', 'message' => 'Format tanggal tidak valid!']);
         exit;
     } else if ($start_date < $today) {
-        echo json_encode(['status' => 'error', 'message' => 'Tanggal pengajuan tidak boleh menggunakan waktu di masa lampau!']);
+        echo json_encode(['status' => 'error', 'message' => 'Tanggal tidak boleh masa lampau!']);
         exit;
     } else if ($total_days <= 0) {
-        echo json_encode(['status' => 'error', 'message' => 'Total hari tidak valid! Pastikan rentang tanggal tidak jatuh murni di akhir pekan.']);
+        echo json_encode(['status' => 'error', 'message' => 'Total hari tidak valid!']);
         exit;
     } else if (empty($reason)) {
         echo json_encode(['status' => 'error', 'message' => 'Alasan wajib diisi!']);
         exit;
     } else {
         try {
-            // Upload Lampiran via Dropify (Wajib untuk sakit, opsional untuk cuti/izin)
             $attachment = null;
             if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                // Path Baru sesuai instruksi
+                // Cek ukuran maks 10MB
+                if ($_FILES['attachment']['size'] > 10 * 1024 * 1024) {
+                    throw new Exception("Ukuran file maksimal 10MB!");
+                }
+
                 $upload_dir = __DIR__ . '/assets/img/leave_requests/';
                 if (!is_dir($upload_dir)) {
                     mkdir($upload_dir, 0777, true);
                 }
                 
                 $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'];
+                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
                 
-                if (in_array($ext, $allowed_ext)) {
-                    $attachment = 'leave_' . $user_id . '_' . time() . '.' . $ext;
+                if (!in_array($ext, $allowed_ext)) {
+                    throw new Exception("File wajib PDF atau Gambar!");
+                }
+
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                    // Kompres & Ubah Format ke .PNG (Maks 200KB)
+                    $attachment = 'leave_' . $user_id . '_' . time() . '.png';
+                    $targetPath = $upload_dir . $attachment;
+                    
+                    switch ($ext) {
+                        case 'jpg':
+                        case 'jpeg':
+                            $srcImage = @imagecreatefromjpeg($_FILES['attachment']['tmp_name']);
+                            break;
+                        case 'png':
+                            $srcImage = @imagecreatefrompng($_FILES['attachment']['tmp_name']);
+                            break;
+                        case 'webp':
+                            $srcImage = @imagecreatefromwebp($_FILES['attachment']['tmp_name']);
+                            break;
+                        default:
+                            $srcImage = false;
+                    }
+
+                    if ($srcImage) {
+                        $width = imagesx($srcImage);
+                        $height = imagesy($srcImage);
+                        
+                        // Scale down jika ukuran dimensi terlalu besar
+                        $maxDim = 1200;
+                        if ($width > $maxDim || $height > $maxDim) {
+                            $ratio = min($maxDim / $width, $maxDim / $height);
+                            $newW = (int)($width * $ratio);
+                            $newH = (int)($height * $ratio);
+                            $resized = imagecreatetruecolor($newW, $newH);
+                            imagealphablending($resized, false);
+                            imagesavealpha($resized, true);
+                            imagecopyresampled($resized, $srcImage, 0, 0, 0, 0, $newW, $newH, $width, $height);
+                            imagedestroy($srcImage);
+                            $srcImage = $resized;
+                        }
+
+                        // Simpan awal sebagai PNG dengan kompresi maksimal
+                        imagepng($srcImage, $targetPath, 9);
+                        imagedestroy($srcImage);
+
+                        // Iterasi kompresi ulang dimensi jika file size > 200KB
+                        while (filesize($targetPath) > 200 * 1024) {
+                            $srcImg2 = imagecreatefrompng($targetPath);
+                            if (!$srcImg2) break;
+                            $w2 = (int)(imagesx($srcImg2) * 0.8);
+                            $h2 = (int)(imagesy($srcImg2) * 0.8);
+                            if ($w2 < 100 || $h2 < 100) { imagedestroy($srcImg2); break; }
+                            $resizedImg2 = imagecreatetruecolor($w2, $h2);
+                            imagealphablending($resizedImg2, false);
+                            imagesavealpha($resizedImg2, true);
+                            imagecopyresampled($resizedImg2, $srcImg2, 0, 0, 0, 0, $w2, $h2, imagesx($srcImg2), imagesy($srcImg2));
+                            imagepng($resizedImg2, $targetPath, 9);
+                            imagedestroy($srcImg2);
+                            imagedestroy($resizedImg2);
+                        }
+                    } else {
+                        move_uploaded_file($_FILES['attachment']['tmp_name'], $targetPath);
+                    }
+                } else { // File PDF
+                    $attachment = 'leave_' . $user_id . '_' . time() . '.pdf';
                     move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . $attachment);
-                } else {
-                    throw new Exception("Format file lampiran tidak valid. Gunakan ekstensi PDF atau Gambar.");
                 }
             } else if ($type === 'sakit') {
-                throw new Exception("Surat Dokter / Lampiran wajib diunggah untuk pengajuan sakit.");
+                throw new Exception("Surat dokter wajib diunggah!");
             }
 
-            // Insert Data
             $stmt = $pdo->prepare("
                 INSERT INTO leave_requests (tenant_id, user_id, type, start_date, end_date, total_days, reason, attachment, status, approved_by, approved_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([$tenant_id, $user_id, $type, $start_date, $end_date, $total_days, $reason, $attachment, $status, $approved_by, $approved_at]);
 
-            // Jika role Atasan mengajukan "Cuti" (otomatis approved), langsung potong kuota
             if ($status === 'approved' && $type === 'cuti') {
                 $year = date('Y', strtotime($start_date));
                 $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ? WHERE user_id = ? AND year = ?")
                     ->execute([$total_days, $user_id, $year]);
             }
 
-            $type_label = ucfirst($type); // Cuti, Izin, Sakit
-            $msg = "Pengajuan {$type_label} berhasil " . ($status === 'approved' ? "dibuat dan disetujui." : "diajukan.");
+            $type_label = ucfirst($type);
+            $msg = "Pengajuan {$type_label} berhasil dibuat.";
             
-            // Simpan pesan ke session untuk ditampilkan di halaman leave.php
             $_SESSION['toast_msg'] = $msg;
             $_SESSION['toast_type'] = "success";
             
-            // Response sukses ke AJAX
             echo json_encode(['status' => 'success']);
             exit;
 
         } catch (Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => 'Gagal memproses: ' . $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
             exit;
         }
     }
@@ -127,14 +195,12 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan';
 
-// Helper Tanggal Hari Ini untuk Form Default (Sudah Menggunakan Timezone Jakarta)
 $curr_d = date('d');
 $curr_m = date('m');
 $curr_y = date('Y');
 
 require_once __DIR__ . '/components/head.php';
 
-// Memuat jQuery & Dropify
 echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/css/dropify.min.css" />';
 echo '<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>';
 echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/js/dropify.min.js"></script>';
@@ -152,6 +218,14 @@ require_once __DIR__ . '/components/sidebar.php';
         background-image: linear-gradient(-45deg, #f9fafb 25%, transparent 25%, transparent 50%, #f9fafb 50%, #f9fafb 75%, transparent 75%, transparent);
     }
 </style>
+
+<!-- OVERLAY LOADING SAAT SUBMIT -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm hidden flex items-center justify-center" style="z-index: 999999;">
+    <div class="bg-surface p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-3">
+        <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i>
+        <p class="text-xs font-bold text-gray-800">Memproses Pengajuan...</p>
+    </div>
+</div>
 
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
     <main class="w-full min-h-screen pb-24 md:pb-8 md:px-6">
@@ -189,18 +263,24 @@ require_once __DIR__ . '/components/sidebar.php';
                                     </select>
                                     <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                                 </div>
+                                
+                                <!-- TAMPILAN SISA CUTI USER -->
+                                <div id="quotaCard" class="mt-2.5 p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-center justify-between">
+                                    <span class="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Sisa Cuti Tahun Ini</span>
+                                    <span class="text-xs font-black text-primary"><span id="userSisaCutiVal"><?= $sisa_cuti ?></span> Hari</span>
+                                </div>
                             </div>
 
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Tanggal Mulai</label>
                                 <div class="grid grid-cols-3 gap-2">
-                                    <select name="start_day" id="start_day" onchange="calculateDays()" class="w-full px-2 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-gray-800 font-medium cursor-pointer">
+                                    <select name="start_day" id="start_day" onchange="syncEndDate()" class="w-full px-2 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-gray-800 font-medium cursor-pointer">
                                         <?php for($i=1; $i<=31; $i++): $val = str_pad($i, 2, '0', STR_PAD_LEFT); ?>
                                             <option value="<?= $val ?>" <?= $curr_d == $val ? 'selected' : '' ?>><?= $val ?></option>
                                         <?php endfor; ?>
                                     </select>
                                     
-                                    <select name="start_month" id="start_month" onchange="calculateDays()" class="w-full px-2 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-gray-800 font-medium cursor-pointer">
+                                    <select name="start_month" id="start_month" onchange="syncEndDate()" class="w-full px-2 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-gray-800 font-medium cursor-pointer">
                                         <?php 
                                         $months = [1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'Mei',6=>'Jun',7=>'Jul',8=>'Agu',9=>'Sep',10=>'Okt',11=>'Nov',12=>'Des'];
                                         foreach($months as $num => $name): $val = str_pad($num, 2, '0', STR_PAD_LEFT); 
@@ -209,7 +289,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                         <?php endforeach; ?>
                                     </select>
                                     
-                                    <select name="start_year" id="start_year" onchange="calculateDays()" class="w-full px-2 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-gray-800 font-medium cursor-pointer">
+                                    <select name="start_year" id="start_year" onchange="syncEndDate()" class="w-full px-2 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-gray-800 font-medium cursor-pointer">
                                         <?php for($i=date('Y'); $i<=date('Y')+2; $i++): ?>
                                             <option value="<?= $i ?>" <?= $curr_y == $i ? 'selected' : '' ?>><?= $i ?></option>
                                         <?php endfor; ?>
@@ -259,18 +339,19 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
                                     Lampiran Bukti <span id="lampiranStatus" class="text-gray-400 lowercase font-medium">(Opsional)</span>
                                 </label>
-                                <input type="file" name="attachment" id="attachment" class="dropify" data-max-file-size="3M" data-allowed-file-extensions="pdf jpg jpeg png webp gif" />
-                                <p class="text-[9px] text-gray-400 mt-1.5">Format didukung: PDF, JPG, PNG, dll. Maks 3MB.</p>
+                                <input type="file" name="attachment" id="attachment" class="dropify" data-max-file-size="10M" data-allowed-file-extensions="pdf jpg jpeg png webp" />
+                                <p class="text-[9px] text-gray-400 mt-1.5">Format didukung: PDF & Gambar (Maks 10MB).</p>
                             </div>
                         </div>
                     </div>
 
+                    <!-- TOMBOL TETAP STATIC -->
                     <div class="mt-8 pt-6 mb-12 md:mb-2 border-t border-gray-100 flex gap-3">
                         <a href="<?= $base_url ?? '' ?>/leave" id="btnCancel" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition flex items-center justify-center">
                             Batal
                         </a>
                         <button type="submit" id="btnSubmitForm" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
-                            <i data-lucide="send" class="w-4 h-4" id="btnSubmitIcon"></i> <span id="btnSubmitText">Simpan</span>
+                            <i data-lucide="send" class="w-4 h-4"></i> <span>Ajukan Cuti</span>
                         </button>
                     </div>
                 </form>
@@ -280,31 +361,55 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
+<!-- ================= MODAL KONFIRMASI KUOTA CUTI MELEBIHI ================= -->
+<div id="confirmQuotaModal" class="fixed inset-0 hidden" style="z-index: 999999;">
+    <div id="quotaOverlay" onclick="closeQuotaModal()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
+        <div id="quotaCardModal" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col p-6">
+            <div class="text-center">
+                <div class="w-12 h-12 rounded-full bg-pending/10 text-pending mx-auto flex items-center justify-center mb-4">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Cuti Melebihi Kuota</h3>
+                <p class="text-xs text-gray-500 mt-2 leading-relaxed">Total hari cuti yang diajukan (<span id="modalReqDays" class="font-bold text-primary">0</span> Hari) melebihi sisa cuti Anda (<span id="modalUserQuota" class="font-bold text-failed">0</span> Hari). Tetap lanjutkan pengajuan?</p>
+                <div class="flex gap-3 mt-8">
+                    <button onclick="closeQuotaModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition">Batal</button>
+                    <button onclick="confirmSubmitLeave()" class="flex-1 py-3 bg-pending hover:bg-pending/90 text-white rounded-xl text-sm font-bold transition shadow-sm">Tetap Lanjutkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
     lucide.createIcons();
 
-    // ==========================================
-    // INISIALISASI DROPIFY
-    // ==========================================
+    const userSisaCuti = <?= $sisa_cuti ?>;
+
     $(document).ready(function(){
         $('.dropify').dropify({
             messages: {
                 'default': '',
                 'replace': '',
                 'remove':  'Hapus',
-                'error':   'Ooops, terjadi kesalahan.'
+                'error':   'File tidak valid.'
             }
         });
     });
 
-    // ==========================================
-    // LOGIKA KALKULASI HARI TERPISAH (EXCLUDE WEEKEND & BUG TIMEZONE)
-    // ==========================================
+    // SINKRONISASI OTOMATIS: SAAT TANGGAL MULAI BERUBAH, TANGGAL SELESAI IKUT BERUBAH
+    function syncEndDate() {
+        document.getElementById('end_day').value = document.getElementById('start_day').value;
+        document.getElementById('end_month').value = document.getElementById('start_month').value;
+        document.getElementById('end_year').value = document.getElementById('start_year').value;
+        calculateDays();
+    }
+
     function calculateDays() {
         const sd = parseInt(document.getElementById('start_day').value, 10);
-        const sm = parseInt(document.getElementById('start_month').value, 10) - 1; // Index bulan JS dimulai dari 0
+        const sm = parseInt(document.getElementById('start_month').value, 10) - 1;
         const sy = parseInt(document.getElementById('start_year').value, 10);
         
         const ed = parseInt(document.getElementById('end_day').value, 10);
@@ -314,44 +419,36 @@ require_once __DIR__ . '/components/sidebar.php';
         const totalInput = document.getElementById('total_days');
         
         if (!isNaN(sd) && !isNaN(sm) && !isNaN(sy) && !isNaN(ed) && !isNaN(em) && !isNaN(ey)) {
-            // MENGGUNAKAN NEW DATE(YEAR, MONTH, DAY) UNTUK MENGHINDARI BUG ZONA WAKTU (UTC OFFSETS)
             const startDate = new Date(sy, sm, sd, 0, 0, 0, 0);
             const endDate = new Date(ey, em, ed, 0, 0, 0, 0);
-            
             const today = new Date();
             today.setHours(0,0,0,0);
             
-            // Validasi masa lampau
             if (startDate < today) {
-                if(typeof window.showToast === 'function') window.showToast("Tanggal pengajuan tidak boleh menggunakan waktu di masa lampau!", "warning");
+                if(typeof window.showToast === 'function') window.showToast("Tanggal tidak boleh masa lampau!", "warning");
                 totalInput.value = '';
                 return;
             }
             
-            // Validasi tanggal terbalik
             if (endDate < startDate) {
                 if(typeof window.showToast === 'function') window.showToast("Tanggal selesai tidak boleh kurang dari tanggal mulai!", "warning");
                 totalInput.value = '';
                 return;
             }
             
-            // Kalkulasi dengan mengabaikan Sabtu (6) dan Minggu (0)
             let countDays = 0;
             let currentDate = new Date(startDate);
             
             while (currentDate <= endDate) {
                 const dayOfWeek = currentDate.getDay();
-                // Hanya hitung jika bukan Minggu (0) dan bukan Sabtu (6)
                 if (dayOfWeek !== 0 && dayOfWeek !== 6) {
                     countDays++;
                 }
-                // Lanjut ke hari berikutnya
                 currentDate.setDate(currentDate.getDate() + 1);
             }
             
-            // Validasi jika total hari jadi 0 (misal cuma ngajuin pas hari Sabtu-Minggu)
             if (countDays === 0) {
-                if(typeof window.showToast === 'function') window.showToast("Rentang tanggal yang dipilih hanya berisi hari libur akhir pekan!", "failed");
+                if(typeof window.showToast === 'function') window.showToast("Rentang tanggal hanya hari libur!", "failed");
                 totalInput.value = '';
                 return;
             }
@@ -362,24 +459,17 @@ require_once __DIR__ . '/components/sidebar.php';
         }
     }
     
-    // Panggil fungsi saat pertama kali halaman dimuat
     calculateDays();
 
-    // ==========================================
-    // LOGIKA DINAMISASI TOMBOL & LAMPIRAN
-    // ==========================================
+    // DINAMISASI HANYA PADA KARTU QUOTA DAN STATUS LAMPIRAN (TEKS TOMBOL STATIC)
     document.getElementById('typeSelect').addEventListener('change', function() {
         const type = this.value; 
-        let typeName = 'Cuti';
-        if(type === 'izin') typeName = 'Izin';
-        if(type === 'sakit') typeName = 'Sakit';
+        const quotaCard = document.getElementById('quotaCard');
         
-        const isEmp = <?= $is_employee ? 'true' : 'false' ?>;
-        const prefix = isEmp ? 'Ajukan ' : 'Buat ';
-        
-        // Cek jika tombol sedang state "Mengalihkan", jangan override teksnya
-        if (!$('#btnSubmitForm').prop('disabled')) {
-            document.getElementById('btnSubmitText').innerText = prefix + typeName;
+        if (type === 'cuti') {
+            quotaCard.classList.remove('hidden');
+        } else {
+            quotaCard.classList.add('hidden');
         }
 
         const lampiranStatus = document.getElementById('lampiranStatus');
@@ -391,37 +481,63 @@ require_once __DIR__ . '/components/sidebar.php';
     });
 
     document.getElementById('typeSelect').dispatchEvent(new Event('change'));
-    
-    // ==========================================
-    // AJAX FORM SUBMIT + DELAY REDIRECT
-    // ==========================================
+
+    // MODAL KONFIRMASI OVER QUOTA
+    function openQuotaModal(reqDays) {
+        document.getElementById('modalReqDays').innerText = reqDays;
+        document.getElementById('modalUserQuota').innerText = userSisaCuti;
+        
+        const qm = document.getElementById('confirmQuotaModal');
+        qm.classList.remove('hidden');
+        lucide.createIcons();
+        setTimeout(() => {
+            document.getElementById('quotaOverlay').classList.remove('opacity-0');
+            document.getElementById('quotaCardModal').classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
+            document.getElementById('quotaCardModal').classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
+        }, 10);
+    }
+
+    function closeQuotaModal() {
+        document.getElementById('quotaOverlay').classList.add('opacity-0');
+        document.getElementById('quotaCardModal').classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100');
+        document.getElementById('quotaCardModal').classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0');
+        setTimeout(() => { document.getElementById('confirmQuotaModal').classList.add('hidden'); }, 300);
+    }
+
+    // FORM SUBMIT HANDLING
     $('#leaveForm').on('submit', function(e) {
         e.preventDefault();
 
         const type = $('#typeSelect').val();
+        const totalDays = parseInt($('#total_days').val()) || 0;
         const filesCount = $('#attachment')[0].files.length;
         
-        // Validasi Lampiran Sakit secara Lokal
         if (type === 'sakit' && filesCount === 0) {
-            if(typeof window.showToast === 'function') {
-                window.showToast("Surat Dokter / Lampiran wajib diunggah untuk pengajuan sakit.", "failed");
-            }
+            if(typeof window.showToast === 'function') window.showToast("Surat dokter wajib diunggah!", "failed");
             return false;
         }
 
-        const formData = new FormData(this);
+        // Cek jika cuti melebihi sisa cuti -> Tampilkan modal konfirmasi
+        if (type === 'cuti' && totalDays > userSisaCuti) {
+            openQuotaModal(totalDays);
+            return false;
+        }
+
+        executeSubmitLeave();
+    });
+
+    function confirmSubmitLeave() {
+        closeQuotaModal();
+        setTimeout(() => { executeSubmitLeave(); }, 300);
+    }
+
+    function executeSubmitLeave() {
+        // Tampilkan Overlay Loading
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+
+        const formData = new FormData(document.getElementById('leaveForm'));
         formData.append('ajax_action', 'submit_leave');
 
-        const btnSubmit = $('#btnSubmitForm');
-        const btnText = $('#btnSubmitText');
-        const originalText = btnText.text();
-        
-        btnSubmit.prop('disabled', true);
-        btnSubmit.html('<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...');
-        $('#btnCancel').addClass('pointer-events-none opacity-50');
-        lucide.createIcons();
-
-        // Menggunakan target window.location.href agar aman dari intercept Service Worker PWA
         fetch(window.location.href, {
             method: 'POST',
             body: formData
@@ -429,33 +545,17 @@ require_once __DIR__ . '/components/sidebar.php';
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                // Ubah status tombol menjadi berhasil
-                btnSubmit.html('<i data-lucide="check-circle" class="w-4 h-4"></i> Berhasil, Mengalihkan...');
-                lucide.createIcons();
-                
-                // Langsung redirect ke halaman leave (Toast akan otomatis dibaca dari Session oleh leave.php)
-                setTimeout(() => {
-                    window.location.href = '<?= $base_url ?? '' ?>/leave';
-                }, 500);
+                window.location.href = '<?= $base_url ?? '' ?>/leave';
             } else {
+                document.getElementById('loadingOverlay').classList.add('hidden');
                 if(typeof window.showToast === 'function') window.showToast(data.message, "error");
-                
-                btnSubmit.prop('disabled', false);
-                btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
-                $('#btnCancel').removeClass('pointer-events-none opacity-50');
-                lucide.createIcons();
             }
         })
         .catch(error => {
+            document.getElementById('loadingOverlay').classList.add('hidden');
             if(typeof window.showToast === 'function') window.showToast("Gagal terhubung ke server.", "error");
-            
-            btnSubmit.prop('disabled', false);
-            btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
-            $('#btnCancel').removeClass('pointer-events-none opacity-50');
-            lucide.createIcons();
         });
-    });
-
+    }
 </script>
 
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>

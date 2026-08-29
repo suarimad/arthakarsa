@@ -29,7 +29,7 @@ if (isset($_REQUEST['ajax_action'])) {
     try {
         $action = $_REQUEST['ajax_action'];
 
-        // AJAX 1: VIEW DETAIL (Menggunakan $_REQUEST agar mendukung metode POST)
+        // AJAX 1: VIEW DETAIL (Menggunakan $_REQUEST agar mendukung POST)
         if ($action === 'view') {
             $id = $_REQUEST['id'];
             
@@ -74,7 +74,7 @@ if (isset($_REQUEST['ajax_action'])) {
                 // Bisa hapus jika: Can_delete_all (Admin/HR) ATAU (Milik sendiri DAN status pending)
                 if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
                     $pdo->prepare("UPDATE overtime_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
-                    $_SESSION['toast_msg'] = "Data pengajuan lembur berhasil dihapus.";
+                    $_SESSION['toast_msg'] = "Data dihapus.";
                     $_SESSION['toast_type'] = "success";
                     echo json_encode(['status' => 'success']);
                 } else {
@@ -110,7 +110,7 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// MENGAMBIL DATA PENGAJUAN LEMBUR UNTUK DATATABLES
+// MENGAMBIL DATA PENGAJUAN LEMBUR UNTUK DATATABLES (Data terbaru di paling atas)
 $base_query = "
     SELECT o.*, u.name as employee_name, u.avatar, d.name as department_name
     FROM overtime_requests o 
@@ -124,7 +124,6 @@ if ($can_view_all) {
     $stmt = $pdo->prepare($base_query . " ORDER BY o.created_at DESC");
     $stmt->execute([$tenant_id]);
 } else {
-    // Employee hanya bisa melihat miliknya sendiri
     $stmt = $pdo->prepare($base_query . " AND o.user_id = ? ORDER BY o.created_at DESC");
     $stmt->execute([$tenant_id, $user_id]);
 }
@@ -137,7 +136,6 @@ echo '<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>';
 echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>';
 ?>
 
-<!-- STYLE CUSTOM UNTUK MENYATUKAN DATATABLES DENGAN DESAIN TAILWIND & FIX TOAST -->
 <style>
     table.dataTable.no-footer { border-bottom: none !important; }
     table.dataTable thead th { border-bottom: 1px solid #f3f4f6 !important; padding: 0.75rem 1rem !important; background-color: #f9fafb; background-image: none !important; }
@@ -150,7 +148,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     .dataTables_paginate .paginate_button.current { background: #ea3800 !important; color: white !important; border-color: #ea3800 !important; }
     .dataTables_paginate .paginate_button.disabled { opacity: 0.5; cursor: not-allowed; }
     
-    /* Mencegah toast tertutup overlay modal (Memaksa z-index tertinggi) */
     div[id*="toast"], div[class*="toast"], #toast-container {
         z-index: 999999 !important;
     }
@@ -170,13 +167,11 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Pengajuan Lembur</h2>
                     <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan jam kerja lembur</p>
                 </div>
-                <!-- TOMBOL AJUKAN LEMBUR -->
                 <a href="overtime_add" class="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
                     <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Ajukan Lembur</span>
                 </a>
             </div>
 
-            <!-- Form Pencarian (Terikat dengan DataTables via JS) -->
             <div class="relative z-0">
                 <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 <input type="text" id="dtSearchInput" placeholder="Cari nama karyawan atau status..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
@@ -204,17 +199,14 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             $dept_name = htmlspecialchars($or['department_name'] ?? '-');
                                             $avatar = !empty($or['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($or['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
                                             
-                                            // Format Tanggal dan Waktu
                                             $date_str = date('d M Y', strtotime($or['date']));
                                             $time_str = date('H:i', strtotime($or['start_time'])) . ' - ' . date('H:i', strtotime($or['end_time']));
                                             
-                                            // Format Durasi Menit jadi Jam & Menit
                                             $dur_m = $or['duration_minutes'];
                                             $hours = floor($dur_m / 60);
                                             $minutes = $dur_m % 60;
                                             $duration_str = ($hours > 0 ? "{$hours}j " : "") . "{$minutes}m";
 
-                                            // Status Badge
                                             $status = strtolower($or['status']);
                                             $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Unknown';
                                             if ($status === 'pending') { $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu'; }
@@ -223,7 +215,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             if ($status === 'canceled') { $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Dibatalkan'; }
                                         ?>
                                             <tr class="hover:bg-gray-50/50 transition-colors group">
-                                                <!-- Kolom Karyawan -->
                                                 <td>
                                                     <div class="flex items-center gap-3">
                                                         <div class="w-9 h-9 rounded-full bg-gray-100 shrink-0 overflow-hidden border border-gray-200">
@@ -236,7 +227,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                     </div>
                                                 </td>
                                                 
-                                                <!-- Kolom Tanggal & Waktu -->
                                                 <td>
                                                     <div class="flex flex-col gap-1 items-start">
                                                         <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-primary"></i> <?= $date_str ?></span>
@@ -244,17 +234,14 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                     </div>
                                                 </td>
 
-                                                <!-- Kolom Durasi -->
                                                 <td class="text-center">
                                                     <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-md"><?= $duration_str ?></span>
                                                 </td>
                                                 
-                                                <!-- Kolom Status -->
                                                 <td>
                                                     <span class="text-[9px] font-bold px-2 py-1 rounded-md <?= $badge_bg ?> <?= $badge_text ?>"><?= $badge_label ?></span>
                                                 </td>
                                                 
-                                                <!-- Kolom Aksi -->
                                                 <td class="text-right">
                                                     <div class="flex items-center justify-end gap-1.5">
                                                         
@@ -323,27 +310,21 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                 <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
             
-            <div id="confirmContent">
-                <!-- Konten dinamis di-inject via JavaScript -->
-            </div>
+            <div id="confirmContent"></div>
         </div>
     </div>
 </div>
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
-<!-- Komponen Toast Global (Membaca session otomatis) -->
+<!-- Komponen Toast Global -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
     lucide.createIcons();
 
-    // Variabel global hak persetujuan untuk JS Modal
     const canApprove = <?= $can_approve ? 'true' : 'false' ?>;
 
-    // ==========================================
-    // INIT DATATABLES JS & BIND SEARCH INPUT
-    // ==========================================
     $(document).ready(function() {
         const table = $('#overtimeTable').DataTable({
             "dom": 't<"bottom"ip>', 
@@ -369,9 +350,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         });
     });
 
-    // ==========================================
-    // HYBRID MODAL AJAX (VIEW DETAIL PENGAJUAN)
-    // ==========================================
     const crudModal = document.getElementById('crudModal');
     const crudOverlay = document.getElementById('crudOverlay');
     const crudCard = document.getElementById('crudCard');
@@ -396,7 +374,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             crudCard.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
         }, 10);
 
-        // Fetch Menggunakan FormData dan POST (Menghindari Service Worker Cache Error PWA)
         const fd = new FormData();
         fd.append('ajax_action', 'view');
         fd.append('id', id);
@@ -407,7 +384,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                 if(res.status === 'success') {
                     const data = res.data;
                     
-                    // Format Date & Time Helper
                     const formatDate = (dateStr) => {
                         const d = new Date(dateStr);
                         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -423,10 +399,17 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Lampiran</a>` 
                         : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran</p>';
 
-                    // Format durasi jadi jam & menit
                     const durHours = Math.floor(data.duration_minutes / 60);
                     const durMins = data.duration_minutes % 60;
                     const durStr = (durHours > 0 ? durHours + " Jam " : "") + (durMins > 0 ? durMins + " Menit" : "");
+
+                    // STATUS BADGE DI MODAL DETAIL
+                    let statusBadge = '';
+                    const st = (data.status || '').toLowerCase();
+                    if (st === 'pending') statusBadge = '<span class="px-2.5 py-1 bg-pending/10 text-pending font-bold text-[10px] rounded-md uppercase tracking-wider">Menunggu</span>';
+                    else if (st === 'approved') statusBadge = '<span class="px-2.5 py-1 bg-success/10 text-success font-bold text-[10px] rounded-md uppercase tracking-wider">Disetujui</span>';
+                    else if (st === 'rejected') statusBadge = '<span class="px-2.5 py-1 bg-failed/10 text-failed font-bold text-[10px] rounded-md uppercase tracking-wider">Ditolak</span>';
+                    else if (st === 'canceled') statusBadge = '<span class="px-2.5 py-1 bg-gray-100 text-gray-500 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibatalkan</span>';
 
                     let actionButtons = '';
                     if (canApprove && data.status === 'pending') {
@@ -452,6 +435,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         <div class="text-center mb-6 mt-2 md:mt-0">
                             <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Pengajuan Lembur</h3>
                             <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
+                            <div class="mt-3">${statusBadge}</div>
                         </div>
                         
                         <div class="space-y-4">
@@ -508,9 +492,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         setTimeout(() => { crudModal.classList.add('hidden'); }, 300);
     }
 
-    // ==========================================
-    // LOGIKA MODAL KONFIRMASI (APPROVE/REJECT/DELETE)
-    // ==========================================
     const confirmModal = document.getElementById('confirmModal');
     const confirmOverlay = document.getElementById('confirmOverlay');
     const confirmCard = document.getElementById('confirmCard');

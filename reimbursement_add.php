@@ -3,11 +3,14 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
-// Set Timezone ke Asia/Jakarta
-date_default_timezone_set('Asia/Jakarta');
-
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
+
+// Ambil Timezone dari tenant_settings
+$stmtTS = $pdo->prepare("SELECT timezone FROM tenant_settings WHERE tenant_id = ?");
+$stmtTS->execute([$tenant_id]);
+$tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
+date_default_timezone_set($tz_setting);
 
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
@@ -63,22 +66,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         exit;
     } else {
         try {
-            // Upload Lampiran via Dropify (WAJIB untuk Reimbursement)
             $attachment = null;
-            $upload_dir = __DIR__ . '/assets/img/reimbursement_requests/';
-            
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-            
-            $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-            $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
-            
-            if (in_array($ext, $allowed_ext)) {
-                $attachment = 'rb_' . $user_id . '_' . time() . '.' . $ext;
-                move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . $attachment);
+            if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+                // Cek ukuran maks 10MB
+                if ($_FILES['attachment']['size'] > 10 * 1024 * 1024) {
+                    throw new Exception("Ukuran file lampiran maksimal 10MB!");
+                }
+
+                $upload_dir = __DIR__ . '/assets/img/reimbursement_requests/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0777, true);
+                }
+                
+                $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
+                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+                
+                if (!in_array($ext, $allowed_ext)) {
+                    throw new Exception("File wajib PDF atau Gambar!");
+                }
+
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                    // Kompres & Ubah Format ke .PNG (Maks 200KB)
+                    $attachment = 'rb_' . $user_id . '_' . time() . '.png';
+                    $targetPath = $upload_dir . $attachment;
+                    
+                    switch ($ext) {
+                        case 'jpg':
+                        case 'jpeg':
+                            $srcImage = @imagecreatefromjpeg($_FILES['attachment']['tmp_name']);
+                            break;
+                        case 'png':
+                            $srcImage = @imagecreatefrompng($_FILES['attachment']['tmp_name']);
+                            break;
+                        case 'webp':
+                            $srcImage = @imagecreatefromwebp($_FILES['attachment']['tmp_name']);
+                            break;
+                        default:
+                            $srcImage = false;
+                    }
+
+                    if ($srcImage) {
+                        $width = imagesx($srcImage);
+                        $height = imagesy($srcImage);
+                        
+                        $maxDim = 1200;
+                        if ($width > $maxDim || $height > $maxDim) {
+                            $ratio = min($maxDim / $width, $maxDim / $height);
+                            $newW = (int)($width * $ratio);
+                            $newH = (int)($height * $ratio);
+                            $resized = imagecreatetruecolor($newW, $newH);
+                            imagealphablending($resized, false);
+                            imagesavealpha($resized, true);
+                            imagecopyresampled($resized, $srcImage, 0, 0, 0, 0, $newW, $newH, $width, $height);
+                            imagedestroy($srcImage);
+                            $srcImage = $resized;
+                        }
+
+                        // Simpan awal sebagai PNG dengan kompresi maksimal
+                        imagepng($srcImage, $targetPath, 9);
+                        imagedestroy($srcImage);
+
+                        // Iterasi kompresi ulang dimensi jika file size > 200KB
+                        while (filesize($targetPath) > 200 * 1024) {
+                            $srcImg2 = imagecreatefrompng($targetPath);
+                            if (!$srcImg2) break;
+                            $w2 = (int)(imagesx($srcImg2) * 0.8);
+                            $h2 = (int)(imagesy($srcImg2) * 0.8);
+                            if ($w2 < 100 || $h2 < 100) { imagedestroy($srcImg2); break; }
+                            $resizedImg2 = imagecreatetruecolor($w2, $h2);
+                            imagealphablending($resizedImg2, false);
+                            imagesavealpha($resizedImg2, true);
+                            imagecopyresampled($resizedImg2, $srcImg2, 0, 0, 0, 0, $w2, $h2, imagesx($srcImg2), imagesy($srcImg2));
+                            imagepng($resizedImg2, $targetPath, 9);
+                            imagedestroy($srcImg2);
+                            imagedestroy($resizedImg2);
+                        }
+                    } else {
+                        move_uploaded_file($_FILES['attachment']['tmp_name'], $targetPath);
+                    }
+                } else { // File PDF
+                    $attachment = 'rb_' . $user_id . '_' . time() . '.pdf';
+                    move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . $attachment);
+                }
             } else {
-                throw new Exception("Format file lampiran tidak valid. Gunakan ekstensi PDF atau Gambar.");
+                throw new Exception("Lampiran struk atau nota wajib diunggah!");
             }
 
             // Insert Data ke reimbursement_requests
@@ -88,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             ");
             $stmt->execute([$tenant_id, $user_id, $rb_date, $type, $amount, $description, $attachment, $status, $approved_by, $approved_at]);
 
-            $msg = "Klaim berhasil " . ($status === 'approved' ? "dibuat dan disetujui." : "diajukan. Menunggu persetujuan.");
+            $msg = "Klaim berhasil dibuat.";
             
             // Simpan pesan ke session untuk dikirim ke halaman reimbursement.php
             $_SESSION['toast_msg'] = $msg;
@@ -138,6 +209,14 @@ require_once __DIR__ . '/components/sidebar.php';
         background-image: linear-gradient(-45deg, #f9fafb 25%, transparent 25%, transparent 50%, #f9fafb 50%, #f9fafb 75%, transparent 75%, transparent);
     }
 </style>
+
+<!-- OVERLAY LOADING SAAT SUBMIT -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm hidden flex items-center justify-center" style="z-index: 999999;">
+    <div class="bg-surface p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-3">
+        <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i>
+        <p class="text-xs font-bold text-gray-800">Memproses Pengajuan...</p>
+    </div>
+</div>
 
 <!-- MAIN CONTENT AREA -->
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
@@ -234,8 +313,8 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
                                     Bukti Lampiran / Foto <span class="text-failed lowercase font-medium">(Wajib)</span>
                                 </label>
-                                <input type="file" name="attachment" required class="dropify" data-max-file-size="3M" data-allowed-file-extensions="pdf jpg jpeg png webp" />
-                                <p class="text-[9px] text-gray-400 mt-1.5">Format didukung: PDF, JPG, PNG. Maks 3MB.</p>
+                                <input type="file" name="attachment" required class="dropify" data-max-file-size="10M" data-allowed-file-extensions="pdf jpg jpeg png webp" />
+                                <p class="text-[9px] text-gray-400 mt-1.5">Format didukung: PDF & Gambar (Maks 10MB).</p>
                             </div>
                         </div>
                     </div>
@@ -269,7 +348,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 'default': '',
                 'replace': '',
                 'remove':  'Hapus',
-                'error':   'Ooops, terjadi kesalahan.'
+                'error':   'File tidak valid.'
             }
         });
     });
@@ -280,17 +359,10 @@ require_once __DIR__ . '/components/sidebar.php';
     $('#reimburseForm').on('submit', function(e) {
         e.preventDefault();
         
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+
         const formData = new FormData(this);
         formData.append('ajax_action', 'submit_reimbursement');
-
-        const btnSubmit = $('#btnSubmitForm');
-        const btnText = $('#btnSubmitText');
-        const originalText = btnText.text();
-        
-        btnSubmit.prop('disabled', true);
-        btnSubmit.html('<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...');
-        $('#btnCancel').addClass('pointer-events-none opacity-50');
-        lucide.createIcons();
 
         // Menggunakan target window.location.href agar aman dari intercept Service Worker PWA
         fetch(window.location.href, {
@@ -300,29 +372,15 @@ require_once __DIR__ . '/components/sidebar.php';
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                btnSubmit.html('<i data-lucide="check-circle" class="w-4 h-4"></i> Berhasil, Mengalihkan...');
-                lucide.createIcons();
-                
-                // Redirect ke halaman reimbursement (Toast dibaca otomatis oleh reimbursement.php)
-                setTimeout(() => {
-                    window.location.href = '<?= $base_url ?? '' ?>/reimbursement';
-                }, 500);
+                window.location.href = '<?= $base_url ?? '' ?>/reimbursement';
             } else {
+                document.getElementById('loadingOverlay').classList.add('hidden');
                 if(typeof window.showToast === 'function') window.showToast(data.message, "error");
-                
-                btnSubmit.prop('disabled', false);
-                btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
-                $('#btnCancel').removeClass('pointer-events-none opacity-50');
-                lucide.createIcons();
             }
         })
         .catch(error => {
+            document.getElementById('loadingOverlay').classList.add('hidden');
             if(typeof window.showToast === 'function') window.showToast("Gagal terhubung ke server.", "error");
-            
-            btnSubmit.prop('disabled', false);
-            btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
-            $('#btnCancel').removeClass('pointer-events-none opacity-50');
-            lucide.createIcons();
         });
     });
 
