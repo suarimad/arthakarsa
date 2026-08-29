@@ -4,6 +4,9 @@ $header_user_name = $user_name ?? $_SESSION['user_name'] ?? 'User';
 $header_user_role = $user_role ?? $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $header_tenant_name = $tenant_name ?? $_SESSION['tenant_name'] ?? 'Perusahaan';
 
+$header_role_id = $_SESSION['role_id'] ?? null;
+$header_role_name_session = strtolower($_SESSION['role'] ?? '');
+
 // LOGIKA OTOMATIS: Ambil avatar dari DB/Session di header agar selalu konsisten di SEMUA halaman
 $header_user_avatar = $user_avatar ?? $_SESSION['avatar'] ?? null;
 
@@ -50,8 +53,19 @@ if (!empty($header_user_avatar)) {
         </div>
     </div>
 
-    <!-- Kanan: Notifikasi & Avatar (Desktop) -->
+    <!-- Kanan: Debugger, Notifikasi & Avatar (Desktop) -->
     <div class="flex items-center gap-3">
+        
+        <!-- Tombol Debugger Khusus Superadmin -->
+        <?php if ($header_role_id == 1 || $header_role_name_session === 'superadmin'): ?>
+        <button onclick="openGlobalDebugger()" class="w-10 h-10 rounded-full hover:bg-gray-200 bg-gray-100 md:bg-surface flex items-center justify-center relative transition shadow-sm border border-gray-100 shrink-0 outline-none">
+            <i data-lucide="bug" class="w-5 h-5 <?= !empty($debug_error) ? 'text-red-500 animate-pulse' : 'text-gray-600' ?>"></i>
+            <?php if (!empty($debug_error)): ?>
+                <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-surface"></span>
+            <?php endif; ?>
+        </button>
+        <?php endif; ?>
+
         <!-- Tombol Notifikasi -->
         <button id="notificationBtn" class="w-10 h-10 rounded-full hover:bg-gray-200 bg-gray-100 md:bg-surface flex items-center justify-center relative transition shadow-sm border border-gray-100 shrink-0">
             <i data-lucide="bell" class="w-5 h-5 text-gray-600"></i>
@@ -65,6 +79,9 @@ if (!empty($header_user_avatar)) {
     </div>
 
 </header>
+
+<!-- Panggil Modal Global Debugger -->
+<?php require_once __DIR__ . '/debugger.php'; ?>
 
 <!-- Script Khusus Komponen Header -->
 <script>
