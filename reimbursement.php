@@ -213,7 +213,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                         <?php foreach($reimbursement_requests as $r): 
                                             $safe_name = htmlspecialchars($r['employee_name'] ?? 'Unknown');
                                             $dept_name = htmlspecialchars($r['department_name'] ?? '-');
-                                            $avatar = !empty($r['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($r['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
+                                            $avatar = !empty($r['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($r['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
                                             
                                             $date_str = date('d M Y', strtotime($r['date']));
                                             $amount_str = "Rp " . number_format($r['amount'], 0, ',', '.');

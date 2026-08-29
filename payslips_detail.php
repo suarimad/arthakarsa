@@ -194,7 +194,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                 $pos_name = !empty($p['position_name']) ? $p['position_name'] : 'Tanpa Posisi';
                                 $dept_pos = htmlspecialchars($d_name . " • " . $pos_name);
                                 
-                                $avatar = !empty($p['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($p['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
+                                $avatar = !empty($p['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($p['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
                                 $net_str = "Rp " . number_format($p['net_salary'], 0, ',', '.');
                                 
                                 $status = $p['status'];

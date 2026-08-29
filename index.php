@@ -80,8 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 
             $clock_in_status = (strtotime($current_time_only) > strtotime($shift_start_db)) ? 'Terlambat' : 'On Time';
 
-            $stmt = $pdo->prepare("INSERT INTO attendances (tenant_id, user_id, date, shift_start, shift_end, clock_in_time, clock_in_lat, clock_in_lng, clock_in_image, clock_in_liveness_status, clock_in_status, clock_in_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Valid', ?, ?)");
-            $stmt->execute([$tenant_id, $user_id, $date_today, $shift_start_db, $shift_end_db, $time_now, $lat, $lng, $image_name, $clock_in_status, $method]);
+            $stmt = $pdo->prepare("INSERT INTO attendances (tenant_id, user_id, date, shift_start, shift_end, clock_in_time, clock_in_lat, clock_in_lng, clock_in_image, clock_in_liveness_status, clock_in_status, clock_in_method, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Valid', ?, ?, ?)");
+            $stmt->execute([$tenant_id, $user_id, $date_today, $shift_start_db, $shift_end_db, $time_now, $lat, $lng, $image_name, $clock_in_status, $method, $time_now]);
             $msg = "Absen Masuk berhasil dicatat!";
 
         } else {
@@ -120,8 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     if ($is_superadmin) {
         try {
             $id = $_POST['id'];
-            $stmtDel = $pdo->prepare("DELETE FROM attendances WHERE id = ?");
-            $stmtDel->execute([$id]);
+            $stmtDel = $pdo->prepare("DELETE FROM attendances WHERE id = ? AND tenant_id = ?");
+            $stmtDel->execute([$id, $tenant_id]);
+            
+            $_SESSION['toast_msg'] = "Data dihapus.";
+            $_SESSION['toast_type'] = "success";
             echo json_encode(['status' => 'success']);
         } catch (Exception $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
@@ -319,7 +322,7 @@ require_once __DIR__ . '/components/sidebar.php';
                                     <div class="flex items-center gap-2">
                                         <span class="px-2 py-1 <?= $status_color ?> text-[9px] font-bold rounded-md"><?= $status_label ?></span>
                                         
-                                        <!-- Tombol Hapus: Hanya Muncul untuk Role 1 atau Superadmin -->
+                                        <!-- Tombol Hapus: Memanggil Modal Konfirmasi untuk Superadmin -->
                                         <?php if($is_superadmin): ?>
                                         <button onclick="deleteAttendance(<?= $att['id'] ?>); event.stopPropagation();" class="text-gray-400 hover:text-failed hover:bg-failed/10 transition p-1.5 rounded-md" title="Hapus Riwayat">
                                             <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -383,6 +386,27 @@ require_once __DIR__ . '/components/sidebar.php';
             <p class="text-xs text-gray-500 mb-6 leading-relaxed">Sistem mendeteksi Anda belum mendaftarkan wajah. Silakan daftarkan wajah Anda terlebih dahulu di Profil untuk menggunakan fitur absensi biometrik.</p>
             <a href="profile" class="w-full bg-primary text-surface py-3.5 rounded-xl text-sm font-bold flex justify-center items-center gap-2 hover:opacity-90 transition shadow-sm active:scale-95"><i data-lucide="user" class="w-5 h-5"></i> Daftarkan Wajah</a>
             <button onclick="closeFaceWarning()" class="w-full mt-3 py-3 bg-gray-50 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition active:scale-95">Batal</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL KONFIRMASI HAPUS ABSENSI (SUPERADMIN) ================= -->
+<div id="deleteAttModal" class="fixed inset-0 hidden" style="z-index: 99999;">
+    <div id="deleteAttOverlay" onclick="closeDeleteAttModal()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
+        <div id="deleteAttCard" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh] p-6">
+            <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeDeleteAttModal()"><div class="w-12 h-1.5 bg-gray-200 rounded-full"></div></div>
+            <div class="text-center">
+                <div class="w-12 h-12 rounded-full bg-failed/10 text-failed mx-auto flex items-center justify-center mb-4">
+                    <i data-lucide="trash-2" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Hapus Riwayat Absensi</h3>
+                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin menghapus data absensi ini secara permanen?</p>
+                <div class="flex gap-3 mt-8">
+                    <button onclick="closeDeleteAttModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Batal</button>
+                    <button id="btnConfirmDeleteAtt" onclick="confirmDeleteAttendance()" class="flex-1 py-3 bg-failed hover:bg-failed/90 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">Ya, Hapus</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -490,24 +514,68 @@ require_once __DIR__ . '/components/sidebar.php';
     lucide.createIcons();
 
     // ==========================================
-    // HAPUS RIWAYAT ABSENSI VIA AJAX (SUPERADMIN)
+    // LOGIKA MODAL HAPUS ABSENSI (SUPERADMIN)
     // ==========================================
+    let selectedAttIdToDelete = null;
+
     window.deleteAttendance = function(id) {
+        selectedAttIdToDelete = id;
+        const modal = document.getElementById('deleteAttModal');
+        const overlay = document.getElementById('deleteAttOverlay');
+        const card = document.getElementById('deleteAttCard');
+        
+        modal.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        setTimeout(() => {
+            overlay.classList.remove('opacity-0');
+            card.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
+            card.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
+        }, 10);
+    };
+
+    window.closeDeleteAttModal = function() {
+        const modal = document.getElementById('deleteAttModal');
+        const overlay = document.getElementById('deleteAttOverlay');
+        const card = document.getElementById('deleteAttCard');
+        
+        overlay.classList.add('opacity-0');
+        card.classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100');
+        card.classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            selectedAttIdToDelete = null;
+        }, 300);
+    };
+
+    window.confirmDeleteAttendance = function() {
+        if (!selectedAttIdToDelete) return;
+        const btn = document.getElementById('btnConfirmDeleteAtt');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline-block"></i> Memproses...';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
         const formData = new FormData();
         formData.append('ajax_action', 'delete_attendance');
-        formData.append('id', id);
+        formData.append('id', selectedAttIdToDelete);
 
-        fetch('', { method: 'POST', body: formData })
+        fetch(window.location.href, { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
                     window.location.reload();
                 } else {
                     window.showToast(data.message, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = 'Ya, Hapus';
+                    closeDeleteAttModal();
                 }
             })
             .catch(() => {
                 window.showToast('Gagal menghapus data', 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Ya, Hapus';
+                closeDeleteAttModal();
             });
     };
 
@@ -569,7 +637,6 @@ require_once __DIR__ . '/components/sidebar.php';
     const shiftStartDB = "<?= $shift_start_db ?>";
     const shiftEndDB = "<?= $shift_end_db ?>";
 
-    // Configuration Mapper
     const methodConfig = {
         'geo_face':       { gps: true,  radius: true,  camera: true,  ai: true,  facing: 'user' },
         'geo_only':       { gps: true,  radius: true,  camera: false, ai: false, facing: null },
@@ -637,7 +704,6 @@ require_once __DIR__ . '/components/sidebar.php';
         }
     }
 
-    // --- FUNGSI FLIP KAMERA ---
     window.flipCamera = function() {
         if (!cameraStream) return;
         currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
@@ -688,7 +754,6 @@ require_once __DIR__ . '/components/sidebar.php';
                 document.getElementById('flipCameraContainer').classList.add('hidden');
             }
 
-            // Sembunyikan box status validasi jika tidak perlu validasi GPS & AI (Murni Foto Selfie/Kamera Saja)
             if(attendanceMethod === 'selfie_only' || attendanceMethod === 'photo_only') {
                 document.getElementById('statusValidationBox').classList.add('hidden');
             } else {
@@ -866,7 +931,7 @@ require_once __DIR__ . '/components/sidebar.php';
         formData.append('shift_start_db', shiftStartDB);
         formData.append('shift_end_db', shiftEndDB);
 
-        fetch('', { method: 'POST', body: formData })
+        fetch(window.location.href, { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') window.location.reload(); 

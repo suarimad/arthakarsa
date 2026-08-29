@@ -204,7 +204,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 <div class="md:col-span-3 space-y-5 md:space-y-6">
                     
                     <?php if($currentUser): 
-                        $curr_avatar = !empty($currentUser['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($currentUser['name']);
+                        $curr_avatar = !empty($currentUser['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($currentUser['name']);
                     ?>
                     <section class="bg-primary rounded-2xl p-5 text-surface shadow-md relative z-0 overflow-hidden flex items-center gap-4">
                         <div class="absolute top-0 right-0 opacity-10 pointer-events-none">
