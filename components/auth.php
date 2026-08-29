@@ -11,7 +11,17 @@ if (!isset($_SESSION['user_id'])) {
     $_SESSION['toast_type'] = "warning"; // warning, error, success
     
     // Redirect ke halaman login
-    header("Location: " . $base_url . "/login.php");
+    header("Location: " . ($base_url ?? '') . "/login");
+    exit;
+}
+
+// Cek Keamanan: Cegah user beraktivitas jika password masih default
+// Eksekusi ini tidak berlaku jika halaman yang sedang diakses adalah "change_password"
+$current_page_auth = basename($_SERVER['PHP_SELF'], '.php');
+if (isset($_SESSION['is_password_default']) && $_SESSION['is_password_default'] == 1 && $current_page_auth !== 'change_password') {
+    $_SESSION['toast_msg'] = "Peringatan Keamanan: Harap ubah kata sandi default Anda sebelum melanjutkan.";
+    $_SESSION['toast_type'] = "warning";
+    header("Location: " . ($base_url ?? '') . "/change_password");
     exit;
 }
 

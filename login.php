@@ -5,6 +5,11 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
 // Redirect ke dashboard jika sudah login
 if (isset($_SESSION['user_id'])) {
+    // Jika masih password default, arahkan ke change_password
+    if (isset($_SESSION['is_password_default']) && $_SESSION['is_password_default'] == 1) {
+        header("Location: change_password");
+        exit;
+    }
     header("Location: index");
     exit;
 }
@@ -64,6 +69,10 @@ if (isset($_SESSION['user_id'])) {
                     <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Kata Sandi</label>
                     <input type="password" name="password" required class="w-full px-4 py-2.5 bg-surface md:bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800" placeholder="••••••••">
                 </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="remember" name="remember" class="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2">
+                    <label for="remember" class="text-xs font-medium text-gray-600 cursor-pointer">Ingat Saya</label>
+                </div>
             </div>
 
             <button type="submit" class="w-full bg-primary text-surface text-sm font-semibold py-3 rounded-xl mt-6 hover:opacity-90 transition shadow-sm md:shadow-none flex justify-center items-center gap-2">
@@ -98,9 +107,8 @@ if (isset($_SESSION['user_id'])) {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Karena login_process.php sudah menset Session Toast,
-                    // Kita cukup mengalihkan halaman, toast akan diurus oleh index.php
-                    setTimeout(() => { window.location.href = 'index'; }, 500); 
+                    // Cek tujuan redirect yang dikirim dari login_process
+                    setTimeout(() => { window.location.href = data.redirect; }, 500); 
                 } else {
                     overlay.classList.add('hidden'); // Matikan loading jika gagal
                     overlay.classList.remove('flex');
