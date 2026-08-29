@@ -59,8 +59,6 @@ if (isset($_POST['ajax_action'])) {
         ";
         $params = [$id, $tenant_id];
         
-        // Note: Karena $can_view_all selalu true di halaman ini, filter user_id dihapus. 
-        // Namun demi kejelasan, kami biarkan strukturnya fleksibel.
         if (!$can_view_all) { $query .= " AND p.user_id = ?"; $params[] = $user_id; }
         
         $stmt = $pdo->prepare($query);
@@ -118,7 +116,7 @@ if (isset($_POST['ajax_action'])) {
         exit;
     }
 
-    // AJAX: TANDAI DIBAYAR ATAU DRAFT
+    // AJAX: TANDAI DIBAYAR ATAU DRAFT (SINGLE)
     if (in_array($action, ['mark_paid', 'mark_draft'])) {
         if (!$can_manage_payroll) exit;
         $id = $_POST['id'];
@@ -130,6 +128,34 @@ if (isset($_POST['ajax_action'])) {
         $_SESSION['toast_msg'] = $action === 'mark_paid' ? 'Slip gaji telah ditandai Lunas/Dibayar.' : 'Status dikembalikan ke Draft.';
         $_SESSION['toast_type'] = 'success';
         echo json_encode(['status' => 'success']);
+        exit;
+    }
+
+    // AJAX: AKSI MASSAL (BULK)
+    if (in_array($action, ['bulk_delete', 'bulk_mark_paid', 'bulk_mark_draft'])) {
+        if (!$can_manage_payroll) exit;
+        $m = (int)$_POST['month'];
+        $y = (int)$_POST['year'];
+
+        if ($action === 'bulk_delete') {
+            $pdo->prepare("DELETE FROM payslips WHERE tenant_id = ? AND month = ? AND year = ?")->execute([$tenant_id, $m, $y]);
+            $_SESSION['toast_msg'] = 'Semua data slip gaji pada periode ini berhasil dihapus.';
+        } elseif ($action === 'bulk_mark_paid') {
+            $pdo->prepare("UPDATE payslips SET status = 'paid', payment_date = CURRENT_DATE WHERE tenant_id = ? AND month = ? AND year = ?")->execute([$tenant_id, $m, $y]);
+            $_SESSION['toast_msg'] = 'Semua slip gaji pada periode ini telah ditandai Lunas/Dibayar.';
+        } elseif ($action === 'bulk_mark_draft') {
+            $pdo->prepare("UPDATE payslips SET status = 'draft', payment_date = NULL WHERE tenant_id = ? AND month = ? AND year = ?")->execute([$tenant_id, $m, $y]);
+            $_SESSION['toast_msg'] = 'Semua slip gaji pada periode ini dikembalikan ke Draft.';
+        }
+        
+        $_SESSION['toast_type'] = 'success';
+        
+        if ($action === 'bulk_delete') {
+            // Jika dihapus semua, kembali ke halaman daftar bulan payslip
+            echo json_encode(['status' => 'success', 'redirect' => ($base_url ?? '') . '/payslips']);
+        } else {
+            echo json_encode(['status' => 'success']);
+        }
         exit;
     }
 }
@@ -182,12 +208,21 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         <div class="hidden md:block"><?php require_once __DIR__ . '/components/header.php'; ?></div>
 
         <div class="px-5 md:px-0 space-y-5 md:space-y-6 mt-6 md:mt-2 relative z-0">
-            <div class="flex items-center gap-3 px-1 mb-2">
-                <a href="<?= ($base_url ?? '') ?>/payslips" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><i data-lucide="chevron-left" class="w-5 h-5"></i></a>
-                <div>
-                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Rincian Payroll</h2>
-                    <p class="text-[11px] md:text-xs text-primary font-bold mt-0.5 uppercase tracking-widest"><?= $period_str ?></p>
+            <div class="flex justify-between items-center px-1 mb-2">
+                <div class="flex items-center gap-3">
+                    <a href="<?= ($base_url ?? '') ?>/payslips" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><i data-lucide="chevron-left" class="w-5 h-5"></i></a>
+                    <div>
+                        <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Rincian Payroll</h2>
+                        <p class="text-[11px] md:text-xs text-primary font-bold mt-0.5 uppercase tracking-widest"><?= $period_str ?></p>
+                    </div>
                 </div>
+                
+                <!-- Tombol Aksi Massal -->
+                <?php if ($can_manage_payroll && !empty($payslips)): ?>
+                <button onclick="openBulkMenu()" class="bg-primary/10 text-primary px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
+                    <i data-lucide="layers" class="w-4 h-4"></i> <span class="hidden md:inline">Aksi Massal</span>
+                </button>
+                <?php endif; ?>
             </div>
 
             <div class="relative z-0">
@@ -322,7 +357,36 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     </div>
 </div>
 
-<!-- ================= MODAL KONFIRMASI (MARK AS PAID / DRAFT) ================= -->
+<!-- ================= MODAL MENU AKSI MASSAL (BULK MENU) ================= -->
+<div id="bulkMenuModal" class="fixed inset-0 hidden" style="z-index: 99999;">
+    <div id="bulkMenuOverlay" onclick="closeBulkMenu()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
+    <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
+        <div id="bulkMenuCard" class="bg-surface w-full md:max-w-sm rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh] p-6">
+            <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeBulkMenu()"><div class="w-12 h-1.5 bg-gray-200 rounded-full"></div></div>
+            <div class="text-center mb-6 mt-2 md:mt-0">
+                <h3 class="text-lg font-bold text-gray-800">Aksi Massal</h3>
+                <p class="text-[11px] text-gray-500 mt-1">Periode <?= $period_str ?></p>
+            </div>
+            
+            <div class="space-y-3">
+                <button onclick="openConfirmBulk('bulk_mark_paid')" class="w-full flex items-center justify-between p-4 bg-success/10 text-success rounded-2xl hover:bg-success hover:text-white transition group outline-none">
+                    <div class="flex items-center gap-3"><i data-lucide="check-circle" class="w-5 h-5"></i><span class="text-sm font-bold">Set Semua Lunas</span></div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 opacity-50 group-hover:opacity-100"></i>
+                </button>
+                <button onclick="openConfirmBulk('bulk_mark_draft')" class="w-full flex items-center justify-between p-4 bg-pending/10 text-pending rounded-2xl hover:bg-pending hover:text-white transition group outline-none">
+                    <div class="flex items-center gap-3"><i data-lucide="file-edit" class="w-5 h-5"></i><span class="text-sm font-bold">Set Semua Draft</span></div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 opacity-50 group-hover:opacity-100"></i>
+                </button>
+                <button onclick="openConfirmBulk('bulk_delete')" class="w-full flex items-center justify-between p-4 bg-failed/10 text-failed rounded-2xl hover:bg-failed hover:text-white transition group outline-none mt-2 border border-failed/20">
+                    <div class="flex items-center gap-3"><i data-lucide="trash-2" class="w-5 h-5"></i><span class="text-sm font-bold">Hapus Semua Data</span></div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 opacity-50 group-hover:opacity-100"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL KONFIRMASI (SINGLE & BULK) ================= -->
 <div id="confirmModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <div id="confirmOverlay" onclick="closeConfirm()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
@@ -479,12 +543,45 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     });
 
     // ==========================================
-    // LOGIKA MODAL KONFIRMASI (MARK AS PAID / DRAFT)
+    // LOGIKA MODAL MENU AKSI MASSAL (BULK)
+    // ==========================================
+    window.openBulkMenu = function() {
+        const modal = document.getElementById('bulkMenuModal');
+        const overlay = document.getElementById('bulkMenuOverlay');
+        const card = document.getElementById('bulkMenuCard');
+        
+        modal.classList.remove('hidden');
+        lucide.createIcons();
+        setTimeout(() => { 
+            overlay.classList.remove('opacity-0'); 
+            card.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0'); 
+            card.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100'); 
+        }, 10);
+    }
+
+    window.closeBulkMenu = function() {
+        const modal = document.getElementById('bulkMenuModal');
+        const overlay = document.getElementById('bulkMenuOverlay');
+        const card = document.getElementById('bulkMenuCard');
+        
+        overlay.classList.add('opacity-0'); 
+        card.classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100'); 
+        card.classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0'); 
+        setTimeout(() => { modal.classList.add('hidden'); }, 300);
+    }
+
+    // ==========================================
+    // LOGIKA MODAL KONFIRMASI (SINGLE & BULK)
     // ==========================================
     let selectedPayslipId = null;
     let selectedAction = null;
+    let isBulkAction = false;
+    const currentMonth = <?= $month ?>;
+    const currentYear = <?= $year ?>;
 
+    // Untuk Single Action
     window.openConfirmModal = function(id, action) {
+        isBulkAction = false;
         selectedPayslipId = id;
         selectedAction = action;
         
@@ -498,23 +595,87 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         btn.className = isPaid ? 'flex-1 py-3 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95 bg-success hover:bg-success/90' : 'flex-1 py-3 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95 bg-pending hover:bg-pending/90';
         btn.innerText = isPaid ? 'Ya, Dibayar' : 'Ya, Draft';
 
+        showConfirmModal();
+    }
+
+    // Untuk Bulk Action
+    window.openConfirmBulk = function(action) {
+        closeBulkMenu();
+        
+        setTimeout(() => {
+            isBulkAction = true;
+            selectedAction = action;
+            
+            let isPaid = (action === 'bulk_mark_paid');
+            let isDelete = (action === 'bulk_delete');
+            
+            let iconClass = isPaid ? 'bg-success/10 text-success' : (isDelete ? 'bg-failed/10 text-failed' : 'bg-pending/10 text-pending');
+            let iconName = isPaid ? 'check-circle' : (isDelete ? 'trash-2' : 'file-edit');
+            let titleStr = isPaid ? 'Tandai Semua Lunas' : (isDelete ? 'Hapus Semua Data' : 'Set Semua Draft');
+            let descStr = isPaid ? 'Apakah Anda yakin ingin mengubah status semua slip gaji di periode ini menjadi Lunas?' : 
+                         (isDelete ? 'Apakah Anda yakin ingin menghapus SELURUH data slip gaji di periode ini? Tindakan ini tidak dapat dibatalkan!' : 'Ubah status seluruh slip gaji pada periode ini kembali ke Draft?');
+            
+            document.getElementById('confirmIconBox').className = `w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-4 ${iconClass}`;
+            document.getElementById('confirmIconBox').innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
+            document.getElementById('confirmTitle').innerText = titleStr;
+            document.getElementById('confirmDesc').innerText = descStr;
+            
+            let btnClass = isPaid ? 'bg-success hover:bg-success/90' : (isDelete ? 'bg-failed hover:bg-failed/90' : 'bg-pending hover:bg-pending/90');
+            const btn = document.getElementById('btnConfirmAction');
+            btn.className = `flex-1 py-3 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95 ${btnClass}`;
+            btn.innerText = 'Ya, Lanjutkan';
+
+            showConfirmModal();
+        }, 300); // Tunggu Bulk Menu Modal tertutup
+    }
+
+    function showConfirmModal() {
         document.getElementById('confirmModal').classList.remove('hidden');
         lucide.createIcons();
-        setTimeout(() => { document.getElementById('confirmOverlay').classList.remove('opacity-0'); document.getElementById('confirmCard').classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0'); document.getElementById('confirmCard').classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100'); }, 10);
+        setTimeout(() => { 
+            document.getElementById('confirmOverlay').classList.remove('opacity-0'); 
+            document.getElementById('confirmCard').classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0'); 
+            document.getElementById('confirmCard').classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100'); 
+        }, 10);
     }
 
     window.closeConfirm = function() {
-        document.getElementById('confirmOverlay').classList.add('opacity-0'); document.getElementById('confirmCard').classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100'); document.getElementById('confirmCard').classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0'); 
-        setTimeout(() => { document.getElementById('confirmModal').classList.add('hidden'); selectedPayslipId = null; }, 300);
+        document.getElementById('confirmOverlay').classList.add('opacity-0'); 
+        document.getElementById('confirmCard').classList.remove('translate-y-0', 'md:scale-100', 'md:opacity-100'); 
+        document.getElementById('confirmCard').classList.add('translate-y-full', 'md:scale-95', 'md:opacity-0'); 
+        setTimeout(() => { 
+            document.getElementById('confirmModal').classList.add('hidden'); 
+            selectedPayslipId = null; 
+            isBulkAction = false;
+        }, 300);
     }
 
     document.getElementById('btnConfirmAction').addEventListener('click', function() {
-        if (!selectedPayslipId) return;
+        if (!isBulkAction && !selectedPayslipId) return;
         this.disabled = true; this.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline-block"></i> Memproses...'; lucide.createIcons();
 
-        const fd = new FormData(); fd.append('ajax_action', selectedAction); fd.append('id', selectedPayslipId);
+        const fd = new FormData(); 
+        fd.append('ajax_action', selectedAction); 
+        
+        if (isBulkAction) {
+            fd.append('month', currentMonth);
+            fd.append('year', currentYear);
+        } else {
+            fd.append('id', selectedPayslipId);
+        }
+
         fetch(window.location.href, { method: 'POST', body: fd }).then(res => res.json()).then(res => {
-            if (res.status === 'success') { window.location.reload(); } else { window.showToast(res.message, 'error'); this.disabled = false; this.innerHTML = 'Gagal'; closeConfirm(); }
+            if (res.status === 'success') { 
+                if (res.redirect) {
+                    window.location.href = res.redirect;
+                } else {
+                    window.location.reload(); 
+                }
+            } else { 
+                window.showToast(res.message, 'error'); this.disabled = false; this.innerHTML = 'Gagal'; closeConfirm(); 
+            }
+        }).catch(() => {
+            window.showToast("Terjadi kesalahan server.", 'error'); this.disabled = false; this.innerHTML = 'Gagal'; closeConfirm();
         });
     });
 </script>
