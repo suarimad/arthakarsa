@@ -12,6 +12,9 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
+// Waktu DATETIME berdasarkan timezone tenant
+$current_time = date('Y-m-d H:i:s');
+
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
 
@@ -22,25 +25,22 @@ $is_employee = ($role_id == 5 || $role_name_session === 'employee');
 // PENANGANAN FORM SUBMIT VIA AJAX
 // ==============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'submit_reimbursement') {
-    header('Content-Type: application/json'); // Wajib return JSON untuk AJAX
+    header('Content-Type: application/json');
     
-    // Menggabungkan Input Tanggal Terpisah menjadi Format YYYY-MM-DD
     $rb_date = sprintf('%04d-%02d-%02d', $_POST['rb_year'], $_POST['rb_month'], $_POST['rb_day']);
     
     $type = $_POST['type'] ?? '';
-    // Mengambil nominal, pastikan format dari UI bersih dari separator ribuan
     $amount = (float)($_POST['amount'] ?? 0); 
     $description = trim($_POST['description'] ?? '');
     
-    // Status ditentukan oleh Role
     $status = $is_employee ? 'pending' : 'approved';
     
     $approved_by = null;
     $approved_at = null;
     
     if ($status === 'approved') {
-        $approved_by = $user_id; // Disetujui otomatis oleh diri sendiri (Admin/HR/Manager/Finance)
-        $approved_at = date('Y-m-d H:i:s');
+        $approved_by = $user_id;
+        $approved_at = $current_time;
     }
 
     $today = date('Y-m-d');
@@ -152,20 +152,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 throw new Exception("Lampiran struk atau nota wajib diunggah!");
             }
 
-            // Insert Data ke reimbursement_requests
+            // Insert Data ke reimbursement_requests dengan Datetime eksplisit
             $stmt = $pdo->prepare("
-                INSERT INTO reimbursement_requests (tenant_id, user_id, date, type, amount, description, attachment, status, approved_by, approved_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO reimbursement_requests (tenant_id, user_id, date, type, amount, description, attachment, status, approved_by, approved_at, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$tenant_id, $user_id, $rb_date, $type, $amount, $description, $attachment, $status, $approved_by, $approved_at]);
+            $stmt->execute([$tenant_id, $user_id, $rb_date, $type, $amount, $description, $attachment, $status, $approved_by, $approved_at, $current_time, $current_time]);
 
             $msg = "Klaim berhasil dibuat.";
             
-            // Simpan pesan ke session untuk dikirim ke halaman reimbursement.php
             $_SESSION['toast_msg'] = $msg;
             $_SESSION['toast_type'] = "success";
             
-            // Response sukses ke AJAX
             echo json_encode(['status' => 'success']);
             exit;
 
@@ -180,17 +178,14 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan';
 
-// Helper Tanggal Hari Ini untuk Form Default
 $curr_d = date('d');
 $curr_m = date('m');
 $curr_y = date('Y');
 
-// Prefix Teks Tombol Berdasarkan Role
 $btn_submit_text = $is_employee ? "Ajukan Klaim" : "Buat Klaim";
 
 require_once __DIR__ . '/components/head.php';
 
-// Memuat jQuery & Dropify
 echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/css/dropify.min.css" />';
 echo '<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>';
 echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/js/dropify.min.js"></script>';
@@ -198,7 +193,6 @@ echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/js/dropi
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<!-- STYLE KHUSUS DROPIFY OVERRIDE UNTUK TAILWIND -->
 <style>
     .dropify-wrapper {
         border-radius: 0.75rem !important;
@@ -229,7 +223,6 @@ require_once __DIR__ . '/components/sidebar.php';
         <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto ">
             
             <div class="flex items-center gap-3 px-1 mb-6">
-                <!-- Back Button diarahkan ke halaman reimbursement -->
                 <a href="<?= $base_url ?? '' ?>/reimbursement" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
                 </a>
@@ -339,9 +332,6 @@ require_once __DIR__ . '/components/sidebar.php';
 <script>
     lucide.createIcons();
 
-    // ==========================================
-    // INISIALISASI DROPIFY
-    // ==========================================
     $(document).ready(function(){
         $('.dropify').dropify({
             messages: {
@@ -353,9 +343,6 @@ require_once __DIR__ . '/components/sidebar.php';
         });
     });
 
-    // ==========================================
-    // AJAX FORM SUBMIT + DELAY REDIRECT
-    // ==========================================
     $('#reimburseForm').on('submit', function(e) {
         e.preventDefault();
         
@@ -364,7 +351,6 @@ require_once __DIR__ . '/components/sidebar.php';
         const formData = new FormData(this);
         formData.append('ajax_action', 'submit_reimbursement');
 
-        // Menggunakan target window.location.href agar aman dari intercept Service Worker PWA
         fetch(window.location.href, {
             method: 'POST',
             body: formData

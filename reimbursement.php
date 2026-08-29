@@ -6,6 +6,15 @@ require_once __DIR__ . '/components/auth.php';
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
+// Ambil Timezone dari tenant_settings untuk Tenant Terkait
+$stmtTS = $pdo->prepare("SELECT timezone FROM tenant_settings WHERE tenant_id = ?");
+$stmtTS->execute([$tenant_id]);
+$tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
+date_default_timezone_set($tz_setting);
+
+// Generate waktu DATETIME saat ini berdasarkan timezone tenant
+$current_time = date('Y-m-d H:i:s');
+
 // ==============================================================================
 // LOGIKA HAK AKSES (ROLE-BASED) - DITAMBAHKAN ROLE 'finance'
 // ==============================================================================
@@ -65,20 +74,25 @@ if (isset($_REQUEST['ajax_action'])) {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = $_POST['id'];
 
-            // PROSES DELETE (SOFT DELETE)
+            // PROSES DELETE (SOFT DELETE DENGAN DATETIME EKSPLISIT)
             if ($action === 'delete') {
-                $stmt = $pdo->prepare("SELECT user_id, status FROM reimbursement_requests WHERE id = ?");
-                $stmt->execute([$id]);
+                $stmt = $pdo->prepare("SELECT user_id, status FROM reimbursement_requests WHERE id = ? AND tenant_id = ?");
+                $stmt->execute([$id, $tenant_id]);
                 $req = $stmt->fetch();
 
-                // Bisa hapus jika: Can_delete_all (Admin/HR) ATAU (Milik sendiri DAN status pending)
-                if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
-                    $pdo->prepare("UPDATE reimbursement_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
-                    $_SESSION['toast_msg'] = "Data dihapus.";
-                    $_SESSION['toast_type'] = "success";
-                    echo json_encode(['status' => 'success']);
+                if ($req) {
+                    if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
+                        $pdo->prepare("UPDATE reimbursement_requests SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
+                            ->execute([$current_time, $current_time, $id, $tenant_id]);
+
+                        $_SESSION['toast_msg'] = "Data dihapus.";
+                        $_SESSION['toast_type'] = "success";
+                        echo json_encode(['status' => 'success']);
+                    } else {
+                        echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki hak untuk menghapus data ini.']);
+                    }
                 } else {
-                    echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki hak untuk menghapus data ini.']);
+                    echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan.']);
                 }
                 exit;
             }
@@ -90,8 +104,9 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
-                $pdo->prepare("UPDATE reimbursement_requests SET status = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_note = ? WHERE id = ?")
-                    ->execute([$status, $user_id, $note, $id]);
+                // Update status dan waktu dengan Datetime eksplisit sesuai timezone tenant
+                $pdo->prepare("UPDATE reimbursement_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
+                    ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
 
                 $_SESSION['toast_msg'] = "Klaim reimbursement berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
                 $_SESSION['toast_type'] = "success";
@@ -314,7 +329,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
-<!-- Komponen Toast Global (Membaca session otomatis) -->
+<!-- Komponen Toast Global -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
