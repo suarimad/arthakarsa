@@ -1,0 +1,65 @@
+CREATE TABLE `user_salaries` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(11) DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `basic_salary` decimal(15,2) NOT NULL DEFAULT 0 COMMENT 'Gaji Pokok',
+  `overtime_rate` decimal(15,2) NOT NULL DEFAULT 0 COMMENT 'Tarif Lembur per Jam',
+  `payment_type` enum('monthly','weekly','daily') DEFAULT 'monthly',
+  `bank_name` varchar(100) DEFAULT NULL COMMENT 'Nama Bank (opsional)',
+  `bank_account` varchar(100) DEFAULT NULL COMMENT 'Nomor Rekening (opsional)',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_user_salary` (`user_id`),
+  KEY `fk_salary_tenant` (`tenant_id`),
+  CONSTRAINT `fk_salary_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_salary_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `payslips` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(11) DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `month` int(2) NOT NULL COMMENT 'Bulan (1-12)',
+  `year` int(4) NOT NULL COMMENT 'Tahun',
+  `basic_salary` decimal(15,2) NOT NULL COMMENT 'Gaji Pokok saat slip dicetak',
+  `total_earnings` decimal(15,2) NOT NULL DEFAULT 0 COMMENT 'Total Pemasukan Tambahan',
+  `total_deductions` decimal(15,2) NOT NULL DEFAULT 0 COMMENT 'Total Potongan',
+  `net_salary` decimal(15,2) NOT NULL COMMENT 'Take Home Pay (Gaji Pokok + Pemasukan - Potongan)',
+  `status` enum('draft','generated','paid') DEFAULT 'draft' COMMENT 'Draft = Baru dihitung, Generated = Siap dikirim, Paid = Sudah ditransfer',
+  `payment_date` date DEFAULT NULL COMMENT 'Tanggal uang ditransfer',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_user_month_year` (`user_id`,`month`,`year`),
+  KEY `fk_payslips_tenant` (`tenant_id`),
+  CONSTRAINT `fk_payslips_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payslips_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE `payslip_details` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `payslip_id` int(11) NOT NULL,
+  `type` enum('earning','deduction') NOT NULL COMMENT 'Pemasukan atau Potongan',
+  `name` varchar(255) NOT NULL COMMENT 'Nama Komponen (Contoh: Uang Lembur, Potongan Telat)',
+  `amount` decimal(15,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_payslip_details_main` (`payslip_id`),
+  CONSTRAINT `fk_payslip_details_main` FOREIGN KEY (`payslip_id`) REFERENCES `payslips` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `tenant_settings`
+ADD `payroll_bpjs_enabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = Hitung & Potong BPJS otomatis, 0 = Tidak',
+ADD `payroll_alpha_method` enum('none','prorata','fixed') NOT NULL DEFAULT 'none' COMMENT 'Metode potongan absen tanpa keterangan',
+ADD `payroll_alpha_nominal` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Nominal potong per hari (jika method = fixed)',
+ADD `payroll_meal_allowance` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Tunjangan makan harian (dikali total hadir)',
+ADD `payroll_transport_allowance` decimal(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Tunjangan transport harian (dikali total hadir)';
+
+ALTER TABLE `tenant_settings`
+ADD `bpjs_kesehatan_percent` decimal(5,2) NOT NULL DEFAULT 1.00 COMMENT 'Persentase potongan BPJS Kesehatan',
+ADD `bpjs_ketenagakerjaan_percent` decimal(5,2) NOT NULL DEFAULT 3.00 COMMENT 'Persentase potongan BPJS Ketenagakerjaan (JHT+JP)';
+
+ALTER TABLE `tenant_settings`
+ADD `payroll_cutoff_start` int(2) NOT NULL DEFAULT 1 COMMENT 'Tanggal buka buku',
+ADD `payroll_cutoff_end` int(2) NOT NULL DEFAULT 31 COMMENT 'Tanggal tutup buku';

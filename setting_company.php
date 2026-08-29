@@ -15,196 +15,238 @@ if (!in_array($role_id, [1, 2]) && !in_array($role_name_session, ['admin', 'supe
 
 $tenant_id = $_SESSION['tenant_id'];
 
-// ==========================================
-// PENANGANAN POST: UPDATE DATA PERUSAHAAN
-// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $address = trim($_POST['address'] ?? '');
     $attendance_method = $_POST['attendance_method'] ?? 'geo_face';
+    
+    // Variabel Payroll Settings
+    $payroll_cutoff_start = (int)($_POST['payroll_cutoff_start'] ?? 1);
+    $payroll_cutoff_end = (int)($_POST['payroll_cutoff_end'] ?? 31);
+    $payroll_bpjs_enabled = isset($_POST['payroll_bpjs_enabled']) ? 1 : 0;
+    $bpjs_kesehatan_percent = (float)($_POST['bpjs_kesehatan_percent'] ?? 1.00);
+    $bpjs_ketenagakerjaan_percent = (float)($_POST['bpjs_ketenagakerjaan_percent'] ?? 3.00);
+    $payroll_alpha_method = $_POST['payroll_alpha_method'] ?? 'none';
+    $payroll_alpha_nominal = (float)($_POST['payroll_alpha_nominal'] ?? 0);
+    $payroll_meal_allowance = (float)($_POST['payroll_meal_allowance'] ?? 0);
+    $payroll_transport_allowance = (float)($_POST['payroll_transport_allowance'] ?? 0);
 
     if (empty($name)) {
         $_SESSION['toast_msg'] = "Nama perusahaan wajib diisi!";
         $_SESSION['toast_type'] = "warning";
     } else {
         try {
-            $pdo->beginTransaction(); // Gunakan transaksi karena mengupdate 2 tabel
+            $pdo->beginTransaction(); 
 
-            // 1. Update tabel tenants
-            $stmt = $pdo->prepare("
-                UPDATE tenants 
-                SET name = ?, email = ?, phone = ?, address = ? 
-                WHERE id = ?
-            ");
-            $stmt->execute([$name, $email, $phone, $address, $tenant_id]);
+            // Proses Upload Logo
+            $stmtLogoCheck = $pdo->prepare("SELECT logo FROM tenants WHERE id = ?");
+            $stmtLogoCheck->execute([$tenant_id]);
+            $existingLogo = $stmtLogoCheck->fetchColumn();
+            $logo_filename = $existingLogo ?: null;
 
-            // 2. Update atau Insert tabel tenant_settings (Cek manual keberadaan data)
+            if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = __DIR__ . '/assets/img/tenants/';
+                if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+                $ext = strtolower(pathinfo($_FILES['logo']['name'], PATHINFO_EXTENSION));
+                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (in_array($ext, $allowed_ext)) {
+                    if ($logo_filename && file_exists($upload_dir . $logo_filename)) unlink($upload_dir . $logo_filename);
+                    $logo_filename = 'tenant_' . $tenant_id . '_' . time() . '.' . $ext;
+                    move_uploaded_file($_FILES['logo']['tmp_name'], $upload_dir . $logo_filename);
+                } else {
+                    throw new Exception("Format logo tidak valid.");
+                }
+            }
+
+            // 1. Update tenants
+            $pdo->prepare("UPDATE tenants SET name = ?, email = ?, phone = ?, address = ?, logo = ? WHERE id = ?")
+                ->execute([$name, $email, $phone, $address, $logo_filename, $tenant_id]);
+
+            // 2. Update tenant_settings
             $stmtCheck = $pdo->prepare("SELECT id FROM tenant_settings WHERE tenant_id = ?");
             $stmtCheck->execute([$tenant_id]);
-            $settingExists = $stmtCheck->fetch();
 
-            if ($settingExists) {
-                // Jika data sudah ada, lakukan UPDATE
-                $stmtSet = $pdo->prepare("
+            if ($stmtCheck->fetch()) {
+                $pdo->prepare("
                     UPDATE tenant_settings 
-                    SET attendance_method = ? 
+                    SET attendance_method = ?, payroll_cutoff_start = ?, payroll_cutoff_end = ?, payroll_bpjs_enabled = ?, 
+                        bpjs_kesehatan_percent = ?, bpjs_ketenagakerjaan_percent = ?, payroll_alpha_method = ?, 
+                        payroll_alpha_nominal = ?, payroll_meal_allowance = ?, payroll_transport_allowance = ?
                     WHERE tenant_id = ?
-                ");
-                $stmtSet->execute([$attendance_method, $tenant_id]);
+                ")->execute([
+                    $attendance_method, $payroll_cutoff_start, $payroll_cutoff_end, $payroll_bpjs_enabled, 
+                    $bpjs_kesehatan_percent, $bpjs_ketenagakerjaan_percent, $payroll_alpha_method, 
+                    $payroll_alpha_nominal, $payroll_meal_allowance, $payroll_transport_allowance, $tenant_id
+                ]);
             } else {
-                // Jika data belum ada, lakukan INSERT
-                $stmtSet = $pdo->prepare("
-                    INSERT INTO tenant_settings (tenant_id, attendance_method) 
-                    VALUES (?, ?)
-                ");
-                $stmtSet->execute([$tenant_id, $attendance_method]);
+                $pdo->prepare("
+                    INSERT INTO tenant_settings (
+                        tenant_id, attendance_method, payroll_cutoff_start, payroll_cutoff_end, payroll_bpjs_enabled, 
+                        bpjs_kesehatan_percent, bpjs_ketenagakerjaan_percent, payroll_alpha_method, 
+                        payroll_alpha_nominal, payroll_meal_allowance, payroll_transport_allowance
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ")->execute([
+                    $tenant_id, $attendance_method, $payroll_cutoff_start, $payroll_cutoff_end, $payroll_bpjs_enabled, 
+                    $bpjs_kesehatan_percent, $bpjs_ketenagakerjaan_percent, $payroll_alpha_method, 
+                    $payroll_alpha_nominal, $payroll_meal_allowance, $payroll_transport_allowance
+                ]);
             }
 
             $pdo->commit();
-
-            // Perbarui session nama tenant agar langsung berubah di UI Header
             $_SESSION['tenant_name'] = $name;
-
-            // Set notifikasi sukses ke Session (Akan dibaca otomatis oleh komponen toast.php)
-            $_SESSION['toast_msg'] = "Profil dan Pengaturan Perusahaan berhasil diperbarui!";
+            $_SESSION['toast_msg'] = "Pengaturan berhasil diperbarui!";
             $_SESSION['toast_type'] = "success";
-            
-            // Redirect ke halaman saat ini untuk menghindari resubmission form saat direfresh
             header("Location: " . $_SERVER['REQUEST_URI']);
             exit;
-
         } catch (Exception $e) {
             $pdo->rollBack();
-            $_SESSION['toast_msg'] = "Kesalahan sistem: " . $e->getMessage();
+            $_SESSION['toast_msg'] = "Kesalahan: " . $e->getMessage();
             $_SESSION['toast_type'] = "error";
         }
     }
 }
 
-// ==========================================
-// AMBIL DATA PERUSAHAAN & SETTING TERBARU
-// ==========================================
+$tenantData = [];
 try {
-    $stmtTenant = $pdo->prepare("
-        SELECT t.*, ts.attendance_method 
-        FROM tenants t 
-        LEFT JOIN tenant_settings ts ON t.id = ts.tenant_id 
-        WHERE t.id = ?
-    ");
+    $stmtTenant = $pdo->prepare("SELECT * FROM tenants WHERE id = ?");
     $stmtTenant->execute([$tenant_id]);
-    $tenantData = $stmtTenant->fetch(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    $tenantData = [];
-}
+    if ($baseTenant = $stmtTenant->fetch(PDO::FETCH_ASSOC)) $tenantData = $baseTenant;
+
+    $stmtSettings = $pdo->prepare("SELECT * FROM tenant_settings WHERE tenant_id = ?");
+    $stmtSettings->execute([$tenant_id]);
+    if ($settingsData = $stmtSettings->fetch(PDO::FETCH_ASSOC)) $tenantData = array_merge($tenantData, $settingsData);
+} catch (Exception $e) {}
 
 $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
-// Kita panggil nama tenant langsung dari database agar selalu fresh, jika gagal fallback ke session
 $tenant_name = $tenantData['name'] ?? $_SESSION['tenant_name'] ?? 'Perusahaan';
 
 require_once __DIR__ . '/components/head.php';
+echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/css/dropify.min.css" />';
+echo '<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>';
+echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/js/dropify.min.js"></script>';
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<!-- MAIN CONTENT AREA -->
-<div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
-    <!-- pb-6 di mobile, pb-8 di desktop -->
-    <main class="w-full min-h-screen pb-6 md:pb-8 md:px-6">
-        
-        <!-- HEADER HANYA TAMPIL DI DESKTOP -->
-        <div class="hidden md:block">
-            <?php require_once __DIR__ . '/components/header.php'; ?>
-        </div>
+<style>
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    .dropify-wrapper { border-radius: 0.75rem !important; border: 1px solid #e5e7eb !important; background-color: #f9fafb !important; }
+</style>
 
-        <!-- PAGE CONTENT: Margin top disesuaikan untuk mobile krn header hilang -->
-        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto">
-            
-            <!-- Judul & Back Button -->
+<div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
+    <main class="w-full min-h-screen pb-6 md:pb-8 md:px-6">
+        <div class="hidden md:block"><?php require_once __DIR__ . '/components/header.php'; ?></div>
+
+        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto ">
             <div class="flex items-center gap-3 px-1 mb-6">
-                <!-- Kembali diarahkan ke menu -->
-                <a href="<?= ($base_url ?? '') ?>/." class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
-                    <i data-lucide="chevron-left" class="w-5 h-5"></i>
-                </a>
+                <a href="<?= ($base_url ?? '') ?>/." class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><i data-lucide="chevron-left" class="w-5 h-5"></i></a>
                 <div>
-                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight leading-tight">Profil Perusahaan</h2>
-                    <p class="text-[11px] text-gray-500">Ubah informasi dasar dan pengaturan absensi organisasi Anda.</p>
+                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Profil Perusahaan</h2>
+                    <p class="text-[11px] text-gray-500">Pengaturan profil, absensi, dan jadwal cut-off penggajian.</p>
                 </div>
             </div>
 
-            <!-- Form Card -->
             <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm md:p-6 p-1">
-                <form method="POST" action="">
-                    <div class="space-y-4">
+                <form method="POST" action="" enctype="multipart/form-data">
+                    <div class="space-y-6">
                         
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Nama Perusahaan / Organisasi</label>
-                            <input type="text" name="name" required value="<?= htmlspecialchars($_POST['name'] ?? $tenantData['name'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800" placeholder="Misal: PT Teknologi Nusantara">
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Email Resmi Perusahaan</label>
-                            <input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? $tenantData['email'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800" placeholder="admin@perusahaan.com">
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Nomor Telepon / Kantor</label>
-                            <input type="text" name="phone" value="<?= htmlspecialchars($_POST['phone'] ?? $tenantData['phone'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800" placeholder="021-1234567">
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Alamat Lengkap Perusahaan</label>
-                            <textarea name="address" rows="3" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800 resize-none" placeholder="Tuliskan alamat lengkap..."><?= htmlspecialchars($_POST['address'] ?? $tenantData['address'] ?? '') ?></textarea>
-                        </div>
-                        
-                        <hr class="border-gray-100 my-4">
-
-                        <!-- SETTING METODE ABSENSI -->
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Metode Absensi Karyawan</label>
-                            <div class="relative">
-                                <?php $currentMethod = $_POST['attendance_method'] ?? $tenantData['attendance_method'] ?? 'geo_face'; ?>
-                                <select name="attendance_method" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800 appearance-none">
-                                    <option value="geo_face" <?= ($currentMethod == 'geo_face') ? 'selected' : '' ?>>GPS Radius + Wajah AI (Otomatis)</option>
-                                    <option value="geo_only" <?= ($currentMethod == 'geo_only') ? 'selected' : '' ?>>GPS Radius Saja (Tanpa Kamera)</option>
-                                    <option value="anywhere_gps" <?= ($currentMethod == 'anywhere_gps') ? 'selected' : '' ?>>GPS Bebas / WFA (Tanpa Kamera)</option>
-                                    <option value="face_only" <?= ($currentMethod == 'face_only') ? 'selected' : '' ?>>Wajah AI Saja (Tanpa GPS)</option>
-                                    <option value="geo_selfie" <?= ($currentMethod == 'geo_selfie') ? 'selected' : '' ?>>GPS Radius + Foto Selfie</option>
-                                    <option value="selfie_only" <?= ($currentMethod == 'selfie_only') ? 'selected' : '' ?>>Foto Selfie Saja (Tanpa GPS)</option>
-                                    <option value="geo_photo" <?= ($currentMethod == 'geo_photo') ? 'selected' : '' ?>>GPS Radius + Foto Kamera Belakang</option>
-                                    <option value="photo_only" <?= ($currentMethod == 'photo_only') ? 'selected' : '' ?>>Foto Kamera Belakang Saja (Tanpa GPS)</option>
-                                    <option value="tap_only" <?= ($currentMethod == 'tap_only') ? 'selected' : '' ?>>Tap Saja (Tanpa Kamera & GPS)</option>
-                                </select>
-                                <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                        <!-- SEC 1: PROFIL -->
+                        <div class="space-y-4">
+                            <h3 class="text-xs font-bold text-gray-800 border-b border-gray-100 pb-2 mb-3">Informasi Dasar</h3>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Logo Perusahaan</label>
+                                <input type="file" name="logo" class="dropify" data-max-file-size="3M" data-allowed-file-extensions="jpg jpeg png webp" data-default-file="<?= !empty($tenantData['logo']) ? ($base_url ?? '') . '/assets/img/tenants/' . htmlspecialchars($tenantData['logo']) : '' ?>" />
                             </div>
-                            <p class="text-[9px] text-gray-400 mt-1.5 leading-relaxed">Pilih metode validasi yang akan diaplikasikan ke seluruh karyawan pada aplikasi absensi.</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nama Perusahaan</label><input type="text" name="name" required value="<?= htmlspecialchars($_POST['name'] ?? $tenantData['name'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary text-xs font-bold text-gray-800"></div>
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Email</label><input type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? $tenantData['email'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary text-xs font-bold text-gray-800"></div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">No. Telepon</label><input type="text" name="phone" value="<?= htmlspecialchars($_POST['phone'] ?? $tenantData['phone'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary text-xs font-bold text-gray-800"></div>
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Alamat</label><input type="text" name="address" value="<?= htmlspecialchars($_POST['address'] ?? $tenantData['address'] ?? '') ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary text-xs font-bold text-gray-800"></div>
+                            </div>
+                        </div>
+
+                        <!-- SEC 2: PAYROLL -->
+                        <div class="space-y-4 pt-4">
+                            <h3 class="text-xs font-bold text-gray-800 border-b border-gray-100 pb-2 mb-3">Pengaturan Penggajian (Payroll)</h3>
+                            
+                            <!-- CUT OFF DATE -->
+                            <div class="grid grid-cols-2 gap-4 mb-4 border border-primary/20 bg-primary/5 p-4 rounded-xl">
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wider">Tanggal Buka Buku</label>
+                                    <input type="number" name="payroll_cutoff_start" min="1" max="31" value="<?= htmlspecialchars($_POST['payroll_cutoff_start'] ?? $tenantData['payroll_cutoff_start'] ?? 1) ?>" class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none text-xs font-bold text-gray-800" placeholder="1">
+                                    <p class="text-[9px] text-gray-500 mt-1">Mulai hitung absen</p>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wider">Tanggal Tutup Buku</label>
+                                    <input type="number" name="payroll_cutoff_end" min="1" max="31" value="<?= htmlspecialchars($_POST['payroll_cutoff_end'] ?? $tenantData['payroll_cutoff_end'] ?? 31) ?>" class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none text-xs font-bold text-gray-800" placeholder="31">
+                                    <p class="text-[9px] text-gray-500 mt-1">Akhir hitung absen</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between bg-gray-50 border border-gray-200 p-4 rounded-xl">
+                                <div><h4 class="text-xs font-bold text-gray-800">Potong BPJS Karyawan</h4><p class="text-[9px] text-gray-500 mt-0.5">Potong BPJS otomatis</p></div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <?php $bpjs_enabled = $_POST['payroll_bpjs_enabled'] ?? $tenantData['payroll_bpjs_enabled'] ?? 0; ?>
+                                    <input type="checkbox" name="payroll_bpjs_enabled" id="payroll_bpjs_enabled" value="1" class="sr-only peer" <?= $bpjs_enabled ? 'checked' : '' ?>>
+                                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                            
+                            <div id="bpjs_percent_container" class="grid grid-cols-2 gap-4 <?= $bpjs_enabled ? '' : 'hidden' ?> pb-2 border-b border-gray-100 border-dashed">
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Kes (%)</label><input type="number" step="0.01" name="bpjs_kesehatan_percent" value="<?= htmlspecialchars($_POST['bpjs_kesehatan_percent'] ?? $tenantData['bpjs_kesehatan_percent'] ?? 1.00) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800"></div>
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">TK (%)</label><input type="number" step="0.01" name="bpjs_ketenagakerjaan_percent" value="<?= htmlspecialchars($_POST['bpjs_ketenagakerjaan_percent'] ?? $tenantData['bpjs_ketenagakerjaan_percent'] ?? 3.00) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800"></div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Metode Potongan Alpha</label>
+                                    <div class="relative">
+                                        <?php $alphaMethod = $_POST['payroll_alpha_method'] ?? $tenantData['payroll_alpha_method'] ?? 'none'; ?>
+                                        <select name="payroll_alpha_method" id="payroll_alpha_method" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none appearance-none text-xs font-bold text-gray-800">
+                                            <option value="none" <?= ($alphaMethod == 'none') ? 'selected' : '' ?>>Tanpa Potongan</option>
+                                            <option value="prorata" <?= ($alphaMethod == 'prorata') ? 'selected' : '' ?>>Pro-rata</option>
+                                            <option value="fixed" <?= ($alphaMethod == 'fixed') ? 'selected' : '' ?>>Nominal Tetap</option>
+                                        </select>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    </div>
+                                </div>
+                                
+                                <div id="alpha_nominal_container" class="<?= ($alphaMethod == 'fixed') ? '' : 'hidden' ?>">
+                                    <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Nominal Alpha / Hari</label>
+                                    <input type="number" name="payroll_alpha_nominal" id="payroll_alpha_nominal" value="<?= htmlspecialchars($_POST['payroll_alpha_nominal'] ?? $tenantData['payroll_alpha_nominal'] ?? 0) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800">
+                                </div>
+                                
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Uang Makan / Hadir</label><input type="number" name="payroll_meal_allowance" value="<?= htmlspecialchars($_POST['payroll_meal_allowance'] ?? $tenantData['payroll_meal_allowance'] ?? 0) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800"></div>
+                                <div><label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Uang Transport / Hadir</label><input type="number" name="payroll_transport_allowance" value="<?= htmlspecialchars($_POST['payroll_transport_allowance'] ?? $tenantData['payroll_transport_allowance'] ?? 0) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800"></div>
+                            </div>
                         </div>
 
                     </div>
 
                     <div class="mt-8 pt-6 border-t border-gray-100 flex gap-3">
-                        <a href="<?= ($base_url ?? '') ?>/." class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
-                            Batal
-                        </a>
-                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
-                            <i data-lucide="save" class="w-4 h-4"></i> Simpan Perubahan
+                        <button type="submit" class="w-full bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i> Simpan Pengaturan
                         </button>
                     </div>
                 </form>
             </div>
-
         </div>
     </main>
 </div>
 
-<!-- Komponen Toast Global (Otomatis menangkap Session) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
-
 <script>
     lucide.createIcons();
+    $(document).ready(function(){ $('.dropify').dropify(); });
+    document.getElementById('payroll_bpjs_enabled').addEventListener('change', function() { document.getElementById('bpjs_percent_container').classList.toggle('hidden', !this.checked); });
+    document.getElementById('payroll_alpha_method').addEventListener('change', function() { document.getElementById('alpha_nominal_container').classList.toggle('hidden', this.value !== 'fixed'); });
 </script>
-
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>
 </body>
 </html>

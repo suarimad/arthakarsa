@@ -29,26 +29,23 @@ if (isset($_REQUEST['ajax_action'])) {
     try {
         $action = $_REQUEST['ajax_action'];
 
-        // AJAX 1: VIEW DETAIL (Menggunakan $_REQUEST agar mendukung POST)
+        // AJAX 1: VIEW DETAIL (Menggunakan $_REQUEST agar mendukung metode POST)
         if ($action === 'view') {
             $id = $_REQUEST['id'];
             
-            // Query dimodifikasi untuk mendapatkan data kuota dari leave_balances
             $query = "
-                SELECT lr.*, u.name as employee_name, d.name as department_name, a.name as approver_name,
-                       COALESCE(lb.total_quota, 0) as total_quota, COALESCE(lb.used_quota, 0) as used_quota
-                FROM leave_requests lr 
-                LEFT JOIN users u ON lr.user_id = u.id 
+                SELECT o.*, u.name as employee_name, d.name as department_name, a.name as approver_name
+                FROM overtime_requests o 
+                LEFT JOIN users u ON o.user_id = u.id 
                 LEFT JOIN positions p ON u.position_id = p.id
                 LEFT JOIN departments d ON p.department_id = d.id
-                LEFT JOIN users a ON lr.approved_by = a.id
-                LEFT JOIN leave_balances lb ON lr.user_id = lb.user_id AND lb.year = YEAR(lr.start_date)
-                WHERE lr.id = ? AND lr.tenant_id = ?
+                LEFT JOIN users a ON o.approved_by = a.id
+                WHERE o.id = ? AND o.tenant_id = ?
             ";
             $params = [$id, $tenant_id];
             
             if (!$can_view_all) {
-                $query .= " AND lr.user_id = ?";
+                $query .= " AND o.user_id = ?";
                 $params[] = $user_id;
             }
             
@@ -70,14 +67,14 @@ if (isset($_REQUEST['ajax_action'])) {
 
             // PROSES DELETE (SOFT DELETE)
             if ($action === 'delete') {
-                $stmt = $pdo->prepare("SELECT user_id, status FROM leave_requests WHERE id = ?");
+                $stmt = $pdo->prepare("SELECT user_id, status FROM overtime_requests WHERE id = ?");
                 $stmt->execute([$id]);
                 $req = $stmt->fetch();
 
                 // Bisa hapus jika: Can_delete_all (Admin/HR) ATAU (Milik sendiri DAN status pending)
                 if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
-                    $pdo->prepare("UPDATE leave_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
-                    $_SESSION['toast_msg'] = "Data pengajuan berhasil dihapus.";
+                    $pdo->prepare("UPDATE overtime_requests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
+                    $_SESSION['toast_msg'] = "Data pengajuan lembur berhasil dihapus.";
                     $_SESSION['toast_type'] = "success";
                     echo json_encode(['status' => 'success']);
                 } else {
@@ -93,23 +90,10 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
-                $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_note = ? WHERE id = ?")
+                $pdo->prepare("UPDATE overtime_requests SET status = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_note = ? WHERE id = ?")
                     ->execute([$status, $user_id, $note, $id]);
 
-                // Pemotongan Kuota Cuti (Otomatis jika Cuti & Approved)
-                if ($action === 'approve') {
-                    $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ?");
-                    $stmtInfo->execute([$id]);
-                    $info = $stmtInfo->fetch();
-                    
-                    if ($info && strtolower($info['type']) === 'cuti') {
-                        $year = date('Y', strtotime($info['start_date']));
-                        $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ? WHERE user_id = ? AND year = ?")
-                            ->execute([$info['total_days'], $info['user_id'], $year]);
-                    }
-                }
-
-                $_SESSION['toast_msg'] = "Pengajuan berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
+                $_SESSION['toast_msg'] = "Pengajuan lembur berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
                 $_SESSION['toast_type'] = "success";
                 echo json_encode(['status' => 'success']);
                 exit;
@@ -126,27 +110,25 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// MENGAMBIL DATA PENGAJUAN UNTUK DATATABLES (Termasuk Data Kuota)
+// MENGAMBIL DATA PENGAJUAN LEMBUR UNTUK DATATABLES
 $base_query = "
-    SELECT lr.*, u.name as employee_name, u.avatar, d.name as department_name,
-           COALESCE(lb.total_quota, 0) as total_quota, COALESCE(lb.used_quota, 0) as used_quota
-    FROM leave_requests lr 
-    LEFT JOIN users u ON lr.user_id = u.id 
+    SELECT o.*, u.name as employee_name, u.avatar, d.name as department_name
+    FROM overtime_requests o 
+    LEFT JOIN users u ON o.user_id = u.id 
     LEFT JOIN positions p ON u.position_id = p.id
     LEFT JOIN departments d ON p.department_id = d.id
-    LEFT JOIN leave_balances lb ON lr.user_id = lb.user_id AND lb.year = YEAR(lr.start_date)
-    WHERE lr.tenant_id = ? AND lr.deleted_at IS NULL 
+    WHERE o.tenant_id = ? AND o.deleted_at IS NULL 
 ";
 
 if ($can_view_all) {
-    $stmt = $pdo->prepare($base_query . " ORDER BY lr.created_at DESC");
+    $stmt = $pdo->prepare($base_query . " ORDER BY o.created_at DESC");
     $stmt->execute([$tenant_id]);
 } else {
     // Employee hanya bisa melihat miliknya sendiri
-    $stmt = $pdo->prepare($base_query . " AND lr.user_id = ? ORDER BY lr.created_at DESC");
+    $stmt = $pdo->prepare($base_query . " AND o.user_id = ? ORDER BY o.created_at DESC");
     $stmt->execute([$tenant_id, $user_id]);
 }
-$leave_requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$overtime_requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/components/head.php';
 
@@ -185,19 +167,19 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             
             <div class="flex justify-between items-center px-1">
                 <div>
-                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Pengajuan Izin & Cuti</h2>
-                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan cuti, izin, dan sakit</p>
+                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Pengajuan Lembur</h2>
+                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan jam kerja lembur</p>
                 </div>
-                <!-- TOMBOL AJUKAN IZIN -->
-                <a href="leave_add" class="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
-                    <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Ajukan Izin</span>
+                <!-- TOMBOL AJUKAN LEMBUR -->
+                <a href="overtime_add" class="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
+                    <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Ajukan Lembur</span>
                 </a>
             </div>
 
             <!-- Form Pencarian (Terikat dengan DataTables via JS) -->
             <div class="relative z-0">
                 <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                <input type="text" id="dtSearchInput" placeholder="Cari nama karyawan, jenis, atau status..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
+                <input type="text" id="dtSearchInput" placeholder="Cari nama karyawan atau status..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
 
             <div class="md:grid md:grid-cols-3 md:gap-6">
@@ -206,39 +188,34 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                     <section class="relative z-0">
                         <div class="bg-surface md:border border-gray-100 rounded-2xl md:shadow-sm overflow-hidden pb-2 md:pb-0">
                             <div class="overflow-x-auto">
-                                <table id="leaveTable" class="w-full text-left whitespace-nowrap">
+                                <table id="overtimeTable" class="w-full text-left whitespace-nowrap">
                                     <thead>
                                         <tr>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Karyawan</th>
-                                            <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pengajuan</th>
-                                            <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Hari</th>
+                                            <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tanggal & Waktu</th>
+                                            <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Durasi</th>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach($leave_requests as $lr): 
-                                            $safe_name = htmlspecialchars($lr['employee_name'] ?? 'Unknown');
-                                            $dept_name = htmlspecialchars($lr['department_name'] ?? '-');
-                                            $avatar = !empty($lr['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($lr['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
+                                        <?php foreach($overtime_requests as $or): 
+                                            $safe_name = htmlspecialchars($or['employee_name'] ?? 'Unknown');
+                                            $dept_name = htmlspecialchars($or['department_name'] ?? '-');
+                                            $avatar = !empty($or['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($or['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
                                             
-                                            // Format Tanggal
-                                            $start = date('d M Y', strtotime($lr['start_date']));
-                                            $end = date('d M Y', strtotime($lr['end_date']));
-                                            $date_range = ($start === $end) ? $start : "$start - $end";
+                                            // Format Tanggal dan Waktu
+                                            $date_str = date('d M Y', strtotime($or['date']));
+                                            $time_str = date('H:i', strtotime($or['start_time'])) . ' - ' . date('H:i', strtotime($or['end_time']));
                                             
-                                            // Kalkulasi sisa cuti untuk kebutuhan parameter alert modal
-                                            $sisa_cuti = $lr['total_quota'] - $lr['used_quota'];
-                                            
-                                            // Tipe Icon & Warna
-                                            $type = strtolower($lr['type']);
-                                            $type_icon = 'file-text'; $type_color = 'text-gray-600';
-                                            if ($type === 'cuti') { $type_icon = 'calendar-off'; $type_color = 'text-primary'; }
-                                            if ($type === 'izin') { $type_icon = 'user-minus'; $type_color = 'text-blue-500'; }
-                                            if ($type === 'sakit') { $type_icon = 'stethoscope'; $type_color = 'text-pending'; }
+                                            // Format Durasi Menit jadi Jam & Menit
+                                            $dur_m = $or['duration_minutes'];
+                                            $hours = floor($dur_m / 60);
+                                            $minutes = $dur_m % 60;
+                                            $duration_str = ($hours > 0 ? "{$hours}j " : "") . "{$minutes}m";
 
                                             // Status Badge
-                                            $status = strtolower($lr['status']);
+                                            $status = strtolower($or['status']);
                                             $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Unknown';
                                             if ($status === 'pending') { $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu'; }
                                             if ($status === 'approved') { $badge_bg = 'bg-success/10'; $badge_text = 'text-success'; $badge_label = 'Disetujui'; }
@@ -259,17 +236,17 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                     </div>
                                                 </td>
                                                 
-                                                <!-- Kolom Pengajuan -->
+                                                <!-- Kolom Tanggal & Waktu -->
                                                 <td>
                                                     <div class="flex flex-col gap-1 items-start">
-                                                        <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5 capitalize"><i data-lucide="<?= $type_icon ?>" class="w-3.5 h-3.5 <?= $type_color ?>"></i> <?= $type ?></span>
-                                                        <span class="text-[10px] font-medium text-gray-500"><?= $date_range ?></span>
+                                                        <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-primary"></i> <?= $date_str ?></span>
+                                                        <span class="text-[10px] font-medium text-gray-500"><i data-lucide="clock" class="w-3 h-3 inline-block -mt-0.5 mr-0.5"></i> <?= $time_str ?></span>
                                                     </div>
                                                 </td>
 
-                                                <!-- Kolom Total Hari -->
+                                                <!-- Kolom Durasi -->
                                                 <td class="text-center">
-                                                    <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-md"><?= $lr['total_days'] ?> Hari</span>
+                                                    <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-md"><?= $duration_str ?></span>
                                                 </td>
                                                 
                                                 <!-- Kolom Status -->
@@ -281,21 +258,21 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                 <td class="text-right">
                                                     <div class="flex items-center justify-end gap-1.5">
                                                         
-                                                        <button onclick="openViewModal(<?= $lr['id'] ?>)" class="p-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-primary hover:text-white transition shadow-sm active:scale-95" title="Lihat Detail">
+                                                        <button onclick="openViewModal(<?= $or['id'] ?>)" class="p-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-primary hover:text-white transition shadow-sm active:scale-95" title="Lihat Detail">
                                                             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                                         </button>
                                                         
                                                         <?php if ($can_approve && $status === 'pending'): ?>
-                                                            <button onclick="openConfirmModal(<?= $lr['id'] ?>, 'approve', '<?= $type ?>', <?= $lr['total_days'] ?>, <?= $sisa_cuti ?>)" class="p-2 bg-success/10 text-success rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-success hover:text-white transition shadow-sm active:scale-95" title="Setujui">
+                                                            <button onclick="openConfirmModal(<?= $or['id'] ?>, 'approve')" class="p-2 bg-success/10 text-success rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-success hover:text-white transition shadow-sm active:scale-95" title="Setujui">
                                                                 <i data-lucide="check" class="w-3.5 h-3.5"></i>
                                                             </button>
-                                                            <button onclick="openConfirmModal(<?= $lr['id'] ?>, 'reject', '<?= $type ?>', <?= $lr['total_days'] ?>, <?= $sisa_cuti ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Tolak">
+                                                            <button onclick="openConfirmModal(<?= $or['id'] ?>, 'reject')" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Tolak">
                                                                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
                                                             </button>
                                                         <?php endif; ?>
 
-                                                        <?php if ($can_delete_all || ($lr['user_id'] == $user_id && $status === 'pending')): ?>
-                                                            <button onclick="deleteLeave(<?= $lr['id'] ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Hapus Pengajuan">
+                                                        <?php if ($can_delete_all || ($or['user_id'] == $user_id && $status === 'pending')): ?>
+                                                            <button onclick="deleteOvertime(<?= $or['id'] ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Hapus Pengajuan">
                                                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                                             </button>
                                                         <?php endif; ?>
@@ -355,7 +332,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
 
-<!-- Komponen Toast Global -->
+<!-- Komponen Toast Global (Membaca session otomatis) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
@@ -368,12 +345,12 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     // INIT DATATABLES JS & BIND SEARCH INPUT
     // ==========================================
     $(document).ready(function() {
-        const table = $('#leaveTable').DataTable({
+        const table = $('#overtimeTable').DataTable({
             "dom": 't<"bottom"ip>', 
             "pageLength": 10,
             "ordering": false,
             "language": {
-                "emptyTable": "Belum ada riwayat pengajuan",
+                "emptyTable": "Belum ada riwayat lembur",
                 "info": "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
                 "infoEmpty": "Menampilkan 0 s/d 0 dari 0 data",
                 "paginate": {
@@ -393,7 +370,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     });
 
     // ==========================================
-    // HYBRID MODAL AJAX (VIEW DETAIL PENGJUAN)
+    // HYBRID MODAL AJAX (VIEW DETAIL PENGAJUAN)
     // ==========================================
     const crudModal = document.getElementById('crudModal');
     const crudOverlay = document.getElementById('crudOverlay');
@@ -419,7 +396,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             crudCard.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
         }, 10);
 
-        // Fetch Menggunakan FormData dan POST (Menghindari Service Worker Cache Error)
+        // Fetch Menggunakan FormData dan POST (Menghindari Service Worker Cache Error PWA)
         const fd = new FormData();
         fd.append('ajax_action', 'view');
         fd.append('id', id);
@@ -430,51 +407,33 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                 if(res.status === 'success') {
                     const data = res.data;
                     
-                    // Format Date Helper
+                    // Format Date & Time Helper
                     const formatDate = (dateStr) => {
                         const d = new Date(dateStr);
                         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
                     };
+                    const formatTime = (timeStr) => {
+                        if(!timeStr) return '--:--';
+                        return timeStr.substring(0, 5); 
+                    };
 
-                    const typeLabel = data.type.charAt(0).toUpperCase() + data.type.slice(1);
-                    const attUrl = data.attachment ? `${baseUrl}/assets/img/leave_requests/${data.attachment}` : null;
+                    const attUrl = data.attachment ? `${baseUrl}/assets/img/overtime_requests/${data.attachment}` : null;
                     
                     let attachmentHtml = attUrl 
                         ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Lampiran</a>` 
-                        : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran file</p>';
+                        : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran</p>';
 
-                    const remainingQuota = data.total_quota - data.used_quota;
+                    // Format durasi jadi jam & menit
+                    const durHours = Math.floor(data.duration_minutes / 60);
+                    const durMins = data.duration_minutes % 60;
+                    const durStr = (durHours > 0 ? durHours + " Jam " : "") + (durMins > 0 ? durMins + " Menit" : "");
 
                     let actionButtons = '';
                     if (canApprove && data.status === 'pending') {
                         actionButtons = `
                             <div class="flex gap-3 mt-6 border-t border-gray-100 pt-6">
-                                <button onclick="openConfirmModal(${data.id}, 'reject', '${data.type}', ${data.total_days}, ${remainingQuota})" class="flex-1 py-3 bg-failed/10 text-failed rounded-xl text-sm font-bold hover:bg-failed hover:text-white transition active:scale-95 shadow-sm">Tolak</button>
-                                <button onclick="openConfirmModal(${data.id}, 'approve', '${data.type}', ${data.total_days}, ${remainingQuota})" class="flex-1 py-3 bg-success/10 text-success rounded-xl text-sm font-bold hover:bg-success hover:text-white transition active:scale-95 shadow-sm">Setujui</button>
-                            </div>
-                        `;
-                    }
-
-                    // Tampilan Peringatan Info Kuota Cuti (Hanya jika Cuti & Approval)
-                    let quotaHtml = `
-                        <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center ${(!canApprove || data.type.toLowerCase() !== 'cuti') ? 'col-span-2' : ''}">
-                            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Hari</p>
-                            <p class="text-xs font-bold text-primary mt-1">${data.total_days} Hari Kerja</p>
-                        </div>
-                    `;
-                    
-                    if (canApprove && data.type.toLowerCase() === 'cuti') {
-                        const isExceed = data.total_days > remainingQuota;
-                        const quotaColor = isExceed ? 'text-failed' : 'text-success';
-                        
-                        quotaHtml = `
-                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pengajuan</p>
-                                <p class="text-xs font-bold text-primary mt-1">${data.total_days} Hari Kerja</p>
-                            </div>
-                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sisa Cuti Karyawan</p>
-                                <p class="text-xs font-bold ${quotaColor} mt-1">${remainingQuota} Hari</p>
+                                <button onclick="openConfirmModal(${data.id}, 'reject')" class="flex-1 py-3 bg-failed/10 text-failed rounded-xl text-sm font-bold hover:bg-failed hover:text-white transition active:scale-95 shadow-sm">Tolak</button>
+                                <button onclick="openConfirmModal(${data.id}, 'approve')" class="flex-1 py-3 bg-success/10 text-success rounded-xl text-sm font-bold hover:bg-success hover:text-white transition active:scale-95 shadow-sm">Setujui</button>
                             </div>
                         `;
                     }
@@ -491,28 +450,35 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
 
                     crudContent.innerHTML = `
                         <div class="text-center mb-6 mt-2 md:mt-0">
-                            <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Pengajuan ${typeLabel}</h3>
+                            <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Pengajuan Lembur</h3>
                             <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
                         </div>
                         
                         <div class="space-y-4">
                             <div class="grid grid-cols-2 gap-4">
-                                <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tgl Mulai</p>
-                                    <p class="text-xs font-bold text-gray-800 mt-1">${formatDate(data.start_date)}</p>
+                                <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center col-span-2 md:col-span-1">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tgl Pelaksanaan</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1">${formatDate(data.date)}</p>
                                 </div>
-                                <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tgl Selesai</p>
-                                    <p class="text-xs font-bold text-gray-800 mt-1">${formatDate(data.end_date)}</p>
+                                <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center col-span-2 md:col-span-1">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Durasi</p>
+                                    <p class="text-xs font-bold text-primary mt-1">${durStr}</p>
                                 </div>
                             </div>
                             
                             <div class="grid grid-cols-2 gap-4">
-                                ${quotaHtml}
+                                <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Jam Mulai</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1">${formatTime(data.start_time)} WIB</p>
+                                </div>
+                                <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Jam Selesai</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1">${formatTime(data.end_time)} WIB</p>
+                                </div>
                             </div>
                             
                             <div class="bg-gray-50 border border-gray-100 p-4 rounded-xl shadow-sm">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Alasan / Keterangan</p>
+                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Tugas / Pekerjaan</p>
                                 <p class="text-xs font-medium text-gray-700 leading-relaxed">${data.reason}</p>
                                 ${attachmentHtml}
                             </div>
@@ -551,27 +517,16 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     const confirmContent = document.getElementById('confirmContent');
     document.body.appendChild(confirmModal);
 
-    window.openConfirmModal = function(id, action, type = '', requestedDays = 0, remainingQuota = 0) {
-        // Tutup modal detail terlebih dahulu (jika sedang terbuka)
+    window.openConfirmModal = function(id, action) {
         closeCrud();
         
-        // Tunggu animasi tutup selesai baru buka modal konfirmasi
         setTimeout(() => {
             let title = action === 'approve' ? 'Konfirmasi Persetujuan' : 'Konfirmasi Penolakan';
-            let desc = action === 'approve' ? 'Apakah Anda yakin ingin menyetujui pengajuan ini?' : 'Apakah Anda yakin ingin menolak pengajuan ini?';
+            let desc = action === 'approve' ? 'Apakah Anda yakin ingin menyetujui pengajuan lembur ini?' : 'Apakah Anda yakin ingin menolak pengajuan lembur ini?';
             let iconClass = action === 'approve' ? 'bg-success/10 text-success' : 'bg-failed/10 text-failed';
             let iconType = action === 'approve' ? 'check' : 'x';
             let btnClass = action === 'approve' ? 'bg-success hover:bg-success/90' : 'bg-failed hover:bg-failed/90';
             let btnText = action === 'approve' ? 'Ya, Setujui' : 'Ya, Tolak';
-
-            // Peringatan jika melebihi kuota
-            if (action === 'approve' && type.toLowerCase() === 'cuti' && requestedDays > remainingQuota) {
-                iconClass = 'bg-pending/10 text-pending';
-                iconType = 'alert-triangle';
-                btnClass = 'bg-pending hover:bg-pending/90';
-                title = 'Peringatan Kuota Cuti';
-                desc = `<span class="text-failed font-bold">Perhatian:</span> Cuti yang diajukan (<span class="font-bold">${requestedDays} Hari</span>) melebihi sisa kuota karyawan saat ini (<span class="font-bold">${remainingQuota} Hari</span>).<br><br>Sisa cuti karyawan ini akan menjadi minus. Tetap setujui?`;
-            }
 
             let inputHtml = action === 'reject' ? `
                 <div class="mt-4 text-left">
@@ -608,14 +563,14 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         }, 300);
     }
 
-    window.deleteLeave = function(id) {
+    window.deleteOvertime = function(id) {
         confirmContent.innerHTML = `
             <div class="text-center">
                 <div class="w-12 h-12 rounded-full bg-failed/10 text-failed mx-auto flex items-center justify-center mb-4">
                     <i data-lucide="trash-2" class="w-6 h-6"></i>
                 </div>
                 <h3 class="text-lg font-bold text-gray-800">Hapus Pengajuan</h3>
-                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin menghapus atau membatalkan pengajuan ini secara permanen?</p>
+                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin menghapus atau membatalkan pengajuan lembur ini secara permanen?</p>
                 
                 <div class="flex gap-3 mt-8">
                     <button onclick="closeConfirm()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Batal</button>
@@ -645,23 +600,10 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             const noteInput = document.getElementById('rejectionNote');
             note = noteInput.value.trim();
             
-            // Handle validasi jika note kosong
             if (!note) {
                 if(typeof window.showToast === 'function') window.showToast('Alasan penolakan wajib diisi!', 'warning');
-                
-                // Berikan efek visual/getar pada kolom input
                 noteInput.classList.add('border-failed', 'ring-failed', 'bg-failed/5');
                 noteInput.focus();
-                
-                // Pastikan toast memaksa naik ke atas via JS just in case CSS teroverride
-                setTimeout(() => {
-                    document.querySelectorAll('div').forEach(t => {
-                        if(t.id.toLowerCase().includes('toast') || t.className.toLowerCase().includes('toast')) {
-                            t.style.setProperty('z-index', '999999', 'important');
-                        }
-                    });
-                }, 10);
-                
                 return;
             }
         }
@@ -671,7 +613,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         formData.append('id', id);
         if (note) formData.append('note', note);
 
-        // Fetch Menggunakan window.location.href untuk mencegah Service Worker Error
         fetch(window.location.href, { method: 'POST', body: formData })
         .then(res => res.json())
         .then(res => {

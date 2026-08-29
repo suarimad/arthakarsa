@@ -15,9 +15,6 @@ $role_name_session = strtolower($_SESSION['role'] ?? '');
 // Logika Status & Tombol (Karyawan vs Atasan)
 $is_employee = ($role_id == 5 || $role_name_session === 'employee');
 
-$toast_msg = '';
-$toast_type = '';
-
 // Menangkap parameter type dari URL (Misal: ?type=sakit atau hasil rewrite URL leave_add/sakit)
 $type_param = $_GET['type'] ?? ''; 
 $allowed_types = ['cuti', 'izin', 'sakit'];
@@ -28,16 +25,19 @@ if (!in_array(strtolower($type_param), $allowed_types)) {
 }
 
 // ==============================================================================
-// PENANGANAN FORM SUBMIT
+// PENANGANAN FORM SUBMIT (VIA AJAX)
 // ==============================================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'submit_leave') {
+    header('Content-Type: application/json'); // Wajib return JSON untuk AJAX
+    
     $type = $_POST['type'] ?? 'cuti';
     
     // Menggabungkan Input Tanggal Terpisah menjadi Format YYYY-MM-DD
     $start_date = sprintf('%04d-%02d-%02d', $_POST['start_year'], $_POST['start_month'], $_POST['start_day']);
     $end_date = sprintf('%04d-%02d-%02d', $_POST['end_year'], $_POST['end_month'], $_POST['end_day']);
     
-    $total_days = $_POST['total_days'] ?? 1;
+    // Konversi ke Integer untuk keamanan database
+    $total_days = isset($_POST['total_days']) ? (int)$_POST['total_days'] : 0;
     $reason = trim($_POST['reason'] ?? '');
     
     // Status ditentukan oleh Role
@@ -56,14 +56,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validasi Tanggal (Tidak Boleh Lampau & Tanggal Harus Valid)
     if (!checkdate((int)$_POST['start_month'], (int)$_POST['start_day'], (int)$_POST['start_year']) ||
         !checkdate((int)$_POST['end_month'], (int)$_POST['end_day'], (int)$_POST['end_year'])) {
-        $toast_msg = "Format tanggal yang Anda masukkan tidak valid!";
-        $toast_type = "warning";
+        echo json_encode(['status' => 'error', 'message' => 'Format tanggal yang Anda masukkan tidak valid!']);
+        exit;
     } else if ($start_date < $today) {
-        $toast_msg = "Tanggal pengajuan tidak boleh menggunakan waktu di masa lampau!";
-        $toast_type = "warning";
+        echo json_encode(['status' => 'error', 'message' => 'Tanggal pengajuan tidak boleh menggunakan waktu di masa lampau!']);
+        exit;
+    } else if ($total_days <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Total hari tidak valid! Pastikan rentang tanggal tidak jatuh murni di akhir pekan.']);
+        exit;
     } else if (empty($reason)) {
-        $toast_msg = "Alasan wajib diisi!";
-        $toast_type = "warning";
+        echo json_encode(['status' => 'error', 'message' => 'Alasan wajib diisi!']);
+        exit;
     } else {
         try {
             // Upload Lampiran via Dropify (Wajib untuk sakit, opsional untuk cuti/izin)
@@ -102,18 +105,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([$total_days, $user_id, $year]);
             }
 
-            // Kirim Toast Session ke leave.php
-            $_SESSION['toast_msg'] = "Pengajuan berhasil " . ($status === 'approved' ? "dibuat dan disetujui." : "diajukan. Menunggu persetujuan atasan.");
+            $type_label = ucfirst($type); // Cuti, Izin, Sakit
+            $msg = "Pengajuan {$type_label} berhasil " . ($status === 'approved' ? "dibuat dan disetujui." : "diajukan.");
+            
+            // Simpan pesan ke session untuk ditampilkan di halaman leave.php
+            $_SESSION['toast_msg'] = $msg;
             $_SESSION['toast_type'] = "success";
             
-            // Redirect menggunakan base URL
-            $redirect_url = rtrim($base_url ?? '', '/') . '/leave';
-            header("Location: " . $redirect_url);
+            // Response sukses ke AJAX
+            echo json_encode(['status' => 'success']);
             exit;
 
         } catch (Exception $e) {
-            $toast_msg = "Gagal memproses: " . $e->getMessage();
-            $toast_type = "error";
+            echo json_encode(['status' => 'error', 'message' => 'Gagal memproses: ' . $e->getMessage()]);
+            exit;
         }
     }
 }
@@ -137,7 +142,6 @@ echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/Dropify/0.2.2/js/dropi
 require_once __DIR__ . '/components/sidebar.php';
 ?>
 
-<!-- STYLE KHUSUS DROPIFY OVERRIDE UNTUK TAILWIND -->
 <style>
     .dropify-wrapper {
         border-radius: 0.75rem !important;
@@ -149,7 +153,6 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 </style>
 
-<!-- MAIN CONTENT AREA -->
 <div class="flex-1 overflow-y-auto relative w-full overflow-x-hidden bg-surface md:bg-transparent">
     <main class="w-full min-h-screen pb-24 md:pb-8 md:px-6">
         
@@ -157,10 +160,9 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php require_once __DIR__ . '/components/header.php'; ?>
         </div>
 
-        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto max-w-4xl">
+        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto">
             
             <div class="flex items-center gap-3 px-1 mb-6">
-                <!-- Back Button diarahkan ke halaman leave -->
                 <a href="<?= $base_url ?? '' ?>/leave" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
                 </a>
@@ -171,14 +173,12 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm md:p-6 p-1">
-                <form id="leaveForm" method="POST" action="" enctype="multipart/form-data">
+                <form id="leaveForm" enctype="multipart/form-data">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                        <!-- KOLOM KIRI: Detail Tanggal -->
                         <div class="space-y-5">
                             <h3 class="text-xs font-bold text-gray-800 border-b border-gray-100 pb-2 mb-3">Informasi Tanggal</h3>
                             
-                            <!-- JENIS PENGAJUAN -->
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Jenis Pengajuan</label>
                                 <div class="relative">
@@ -191,7 +191,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                 </div>
                             </div>
 
-                            <!-- TANGGAL MULAI (Tiga Input Terpisah) -->
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Tanggal Mulai</label>
                                 <div class="grid grid-cols-3 gap-2">
@@ -218,7 +217,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                 </div>
                             </div>
 
-                            <!-- TANGGAL SELESAI (Tiga Input Terpisah) -->
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Tanggal Selesai</label>
                                 <div class="grid grid-cols-3 gap-2">
@@ -242,15 +240,13 @@ require_once __DIR__ . '/components/sidebar.php';
                                 </div>
                             </div>
 
-                            <!-- TOTAL HARI -->
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Total Hari Kerja</label>
                                 <input type="number" name="total_days" id="total_days" required readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl focus:outline-none transition text-xs text-primary font-bold cursor-not-allowed">
-                                <p class="text-[9px] text-gray-400 mt-1.5">Sabtu dan Minggu tidak dihitung sebagai hari cuti.</p>
+                                <p class="text-[9px] text-gray-400 mt-1.5">Sabtu dan Minggu tidak dihitung sebagai hari pengajuan.</p>
                             </div>
                         </div>
 
-                        <!-- KOLOM KANAN: Keterangan & Lampiran -->
                         <div class="space-y-5 mt-6 md:mt-0">
                             <h3 class="text-xs font-bold text-gray-800 border-b border-gray-100 pb-2 mb-3">Keterangan & Lampiran</h3>
                             
@@ -259,7 +255,6 @@ require_once __DIR__ . '/components/sidebar.php';
                                 <textarea name="reason" required rows="4" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-xs text-gray-800" placeholder="Tuliskan keterangan lengkap pengajuan Anda..."></textarea>
                             </div>
 
-                            <!-- INPUT LAMPIRAN DROPIFY -->
                             <div>
                                 <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
                                     Lampiran Bukti <span id="lampiranStatus" class="text-gray-400 lowercase font-medium">(Opsional)</span>
@@ -271,11 +266,11 @@ require_once __DIR__ . '/components/sidebar.php';
                     </div>
 
                     <div class="mt-8 pt-6 mb-12 md:mb-2 border-t border-gray-100 flex gap-3">
-                        <a href="<?= $base_url ?? '' ?>/leave" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
+                        <a href="<?= $base_url ?? '' ?>/leave" id="btnCancel" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition flex items-center justify-center">
                             Batal
                         </a>
-                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
-                            <i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">Simpan</span>
+                        <button type="submit" id="btnSubmitForm" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
+                            <i data-lucide="send" class="w-4 h-4" id="btnSubmitIcon"></i> <span id="btnSubmitText">Simpan</span>
                         </button>
                     </div>
                 </form>
@@ -285,18 +280,10 @@ require_once __DIR__ . '/components/sidebar.php';
     </main>
 </div>
 
-<!-- Komponen Toast Global (Untuk Error Validasi Form) -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
     lucide.createIcons();
-
-    // Trigger local validation error bila ada
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    if (phpMsg && typeof window.showToast === 'function') {
-        window.showToast(phpMsg, phpType);
-    }
 
     // ==========================================
     // INISIALISASI DROPIFY
@@ -306,33 +293,30 @@ require_once __DIR__ . '/components/sidebar.php';
             messages: {
                 'default': '',
                 'replace': '',
-                'remove':  '',
+                'remove':  'Hapus',
                 'error':   'Ooops, terjadi kesalahan.'
             }
         });
     });
 
     // ==========================================
-    // LOGIKA KALKULASI HARI TERPISAH (EXCLUDE WEEKEND)
+    // LOGIKA KALKULASI HARI TERPISAH (EXCLUDE WEEKEND & BUG TIMEZONE)
     // ==========================================
     function calculateDays() {
-        const sd = document.getElementById('start_day').value;
-        const sm = document.getElementById('start_month').value;
-        const sy = document.getElementById('start_year').value;
+        const sd = parseInt(document.getElementById('start_day').value, 10);
+        const sm = parseInt(document.getElementById('start_month').value, 10) - 1; // Index bulan JS dimulai dari 0
+        const sy = parseInt(document.getElementById('start_year').value, 10);
         
-        const ed = document.getElementById('end_day').value;
-        const em = document.getElementById('end_month').value;
-        const ey = document.getElementById('end_year').value;
+        const ed = parseInt(document.getElementById('end_day').value, 10);
+        const em = parseInt(document.getElementById('end_month').value, 10) - 1;
+        const ey = parseInt(document.getElementById('end_year').value, 10);
         
         const totalInput = document.getElementById('total_days');
         
-        if (sd && sm && sy && ed && em && ey) {
-            const startDate = new Date(`${sy}-${sm}-${sd}`);
-            const endDate = new Date(`${ey}-${em}-${ed}`);
-            
-            // Set time to midnight (menghindari offset zona waktu)
-            startDate.setHours(0,0,0,0);
-            endDate.setHours(0,0,0,0);
+        if (!isNaN(sd) && !isNaN(sm) && !isNaN(sy) && !isNaN(ed) && !isNaN(em) && !isNaN(ey)) {
+            // MENGGUNAKAN NEW DATE(YEAR, MONTH, DAY) UNTUK MENGHINDARI BUG ZONA WAKTU (UTC OFFSETS)
+            const startDate = new Date(sy, sm, sd, 0, 0, 0, 0);
+            const endDate = new Date(ey, em, ed, 0, 0, 0, 0);
             
             const today = new Date();
             today.setHours(0,0,0,0);
@@ -386,42 +370,91 @@ require_once __DIR__ . '/components/sidebar.php';
     // ==========================================
     document.getElementById('typeSelect').addEventListener('change', function() {
         const type = this.value; 
-        
-        // 1. Ubah Wording Cuti/Izin/Sakit
         let typeName = 'Cuti';
         if(type === 'izin') typeName = 'Izin';
         if(type === 'sakit') typeName = 'Sakit';
         
-        // 2. Ubah Kata Depan berdasarkan Role
         const isEmp = <?= $is_employee ? 'true' : 'false' ?>;
         const prefix = isEmp ? 'Ajukan ' : 'Buat ';
         
-        document.getElementById('btnSubmitText').innerText = prefix + typeName;
+        // Cek jika tombol sedang state "Mengalihkan", jangan override teksnya
+        if (!$('#btnSubmitForm').prop('disabled')) {
+            document.getElementById('btnSubmitText').innerText = prefix + typeName;
+        }
 
-        // 3. Wajibkan Lampiran jika Sakit
         const lampiranStatus = document.getElementById('lampiranStatus');
-        
         if (type === 'sakit') {
             lampiranStatus.innerHTML = '<span class="text-failed">(Wajib Surat Dokter)</span>';
         } else {
             lampiranStatus.innerHTML = '(Opsional)';
         }
     });
+
+    document.getElementById('typeSelect').dispatchEvent(new Event('change'));
     
-    // Cegah submit jika sakit tapi lampiran kosong
+    // ==========================================
+    // AJAX FORM SUBMIT + DELAY REDIRECT
+    // ==========================================
     $('#leaveForm').on('submit', function(e) {
+        e.preventDefault();
+
         const type = $('#typeSelect').val();
         const filesCount = $('#attachment')[0].files.length;
         
+        // Validasi Lampiran Sakit secara Lokal
         if (type === 'sakit' && filesCount === 0) {
-            e.preventDefault();
             if(typeof window.showToast === 'function') {
                 window.showToast("Surat Dokter / Lampiran wajib diunggah untuk pengajuan sakit.", "failed");
             }
+            return false;
         }
-    });
 
-    document.getElementById('typeSelect').dispatchEvent(new Event('change'));
+        const formData = new FormData(this);
+        formData.append('ajax_action', 'submit_leave');
+
+        const btnSubmit = $('#btnSubmitForm');
+        const btnText = $('#btnSubmitText');
+        const originalText = btnText.text();
+        
+        btnSubmit.prop('disabled', true);
+        btnSubmit.html('<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...');
+        $('#btnCancel').addClass('pointer-events-none opacity-50');
+        lucide.createIcons();
+
+        // Menggunakan target window.location.href agar aman dari intercept Service Worker PWA
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Ubah status tombol menjadi berhasil
+                btnSubmit.html('<i data-lucide="check-circle" class="w-4 h-4"></i> Berhasil, Mengalihkan...');
+                lucide.createIcons();
+                
+                // Langsung redirect ke halaman leave (Toast akan otomatis dibaca dari Session oleh leave.php)
+                setTimeout(() => {
+                    window.location.href = '<?= $base_url ?? '' ?>/leave';
+                }, 500);
+            } else {
+                if(typeof window.showToast === 'function') window.showToast(data.message, "error");
+                
+                btnSubmit.prop('disabled', false);
+                btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
+                $('#btnCancel').removeClass('pointer-events-none opacity-50');
+                lucide.createIcons();
+            }
+        })
+        .catch(error => {
+            if(typeof window.showToast === 'function') window.showToast("Gagal terhubung ke server.", "error");
+            
+            btnSubmit.prop('disabled', false);
+            btnSubmit.html(`<i data-lucide="send" class="w-4 h-4"></i> <span id="btnSubmitText">${originalText}</span>`);
+            $('#btnCancel').removeClass('pointer-events-none opacity-50');
+            lucide.createIcons();
+        });
+    });
 
 </script>
 
