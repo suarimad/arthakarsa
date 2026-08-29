@@ -12,6 +12,9 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
+// Waktu DATETIME berdasarkan timezone tenant
+$current_time = date('Y-m-d H:i:s');
+
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
 
@@ -36,17 +39,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     
     if ($status === 'approved') {
         $approved_by = $user_id;
-        $approved_at = date('Y-m-d H:i:s');
+        $approved_at = $current_time;
     }
 
     $today = date('Y-m-d');
 
     // Validasi Tanggal & Form
     if (!checkdate((int)$_POST['ot_month'], (int)$_POST['ot_day'], (int)$_POST['ot_year'])) {
-        echo json_encode(['status' => 'error', 'message' => 'Format tanggal yang Anda masukkan tidak valid!']);
+        echo json_encode(['status' => 'error', 'message' => 'Format tanggal tidak valid!']);
         exit;
     } else if ($ot_date < $today) {
-        echo json_encode(['status' => 'error', 'message' => 'Tanggal pengajuan tidak boleh menggunakan waktu di masa lampau!']);
+        echo json_encode(['status' => 'error', 'message' => 'Tanggal pengajuan tidak boleh masa lampau!']);
         exit;
     } else if (empty($start_time) || empty($end_time)) {
         echo json_encode(['status' => 'error', 'message' => 'Jam mulai dan jam selesai wajib diisi!']);
@@ -143,12 +146,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 }
             }
 
-            // Insert Data ke overtime_requests
+            // Insert Data ke overtime_requests dengan Datetime eksplisit
             $stmt = $pdo->prepare("
-                INSERT INTO overtime_requests (tenant_id, user_id, date, start_time, end_time, duration_minutes, reason, attachment, status, approved_by, approved_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO overtime_requests (tenant_id, user_id, date, start_time, end_time, duration_minutes, reason, attachment, status, approved_by, approved_at, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$tenant_id, $user_id, $ot_date, $start_time, $end_time, $duration_minutes, $reason, $attachment, $status, $approved_by, $approved_at]);
+            $stmt->execute([$tenant_id, $user_id, $ot_date, $start_time, $end_time, $duration_minutes, $reason, $attachment, $status, $approved_by, $approved_at, $current_time, $current_time]);
 
             $msg = "Berhasil mengajukan lembur" . ($status === 'approved' ? " (Otomatis disetujui)." : ".");
             
