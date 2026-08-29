@@ -128,11 +128,11 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php require_once __DIR__ . '/components/header.php'; ?>
         </div>
 
-        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full max-w-2xl mx-auto">
+        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto">
             
             <!-- Judul & Back Button -->
             <div class="flex items-center gap-3 px-1 mb-6">
-                <a href="<?= ($base_url ?? '') ?>/profile" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition">
+                <a href="<?= ($base_url ?? '') ?>/profile" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition shadow-sm active:scale-95">
                     <i data-lucide="chevron-left" class="w-5 h-5"></i>
                 </a>
                 <div>
@@ -141,8 +141,8 @@ require_once __DIR__ . '/components/sidebar.php';
                 </div>
             </div>
 
-            <!-- Form Card -->
-            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm  space-y-6">
+            <!-- Form Card (Disamakan layout-nya dengan change_password.php) -->
+            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm p-6 md:p-8 space-y-6">
                 
                 <!-- UPLOAD AVATAR SECTION -->
                 <div class="flex flex-col items-center justify-center text-center pb-6 border-b border-gray-100">
@@ -168,32 +168,32 @@ require_once __DIR__ . '/components/sidebar.php';
                         
                         <!-- Nama (Readonly) -->
                         <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nama Lengkap</label>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Nama Lengkap</label>
                             <input type="text" value="<?= htmlspecialchars($user_name) ?>" readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 cursor-not-allowed focus:outline-none transition">
                             <p class="text-[9px] text-gray-400 mt-1.5">Nama hanya dapat diubah oleh Administrator / HRD.</p>
                         </div>
 
                         <!-- Email (Readonly) -->
                         <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Alamat Email</label>
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Alamat Email</label>
                             <input type="email" value="<?= htmlspecialchars($user_email) ?>" readonly class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 cursor-not-allowed focus:outline-none transition">
                             <p class="text-[9px] text-gray-400 mt-1.5">Email digunakan sebagai ID login akun Anda.</p>
                         </div>
 
-                        <!-- WhatsApp (Editable) -->
+                        <!-- WhatsApp (Editable) Numeric Input Mobile -->
                         <div>
-                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase">Nomor WhatsApp</label>
-                            <input type="text" name="whatsapp" value="<?= htmlspecialchars($user_whatsapp) ?>" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none transition" placeholder="Misal: 08123456789">
+                            <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Nomor WhatsApp</label>
+                            <input type="tel" inputmode="numeric" pattern="[0-9\-\+]*" name="whatsapp" value="<?= htmlspecialchars($user_whatsapp) ?>" oninput="this.value = this.value.replace(/[^0-9\-\+]/g, '')" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Misal: 08123456789">
                         </div>
 
                     </div>
 
                     <!-- Tombol Aksi -->
                     <div class="mt-8 pt-6 border-t border-gray-100 flex gap-3">
-                        <a href="<?= ($base_url ?? '') ?>/profile" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition">
+                        <a href="<?= ($base_url ?? '') ?>/profile" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition active:scale-95 flex items-center justify-center">
                             Batal
                         </a>
-                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
+                        <button type="submit" class="flex-1 bg-primary text-surface py-3 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2 active:scale-95">
                             <i data-lucide="save" class="w-4 h-4"></i> Simpan Perubahan
                         </button>
                     </div>
@@ -228,10 +228,10 @@ require_once __DIR__ . '/components/sidebar.php';
 
             <!-- Action Buttons -->
             <div class="flex gap-3">
-                <button type="button" onclick="closeCropModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-200 transition">
+                <button type="button" onclick="closeCropModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-200 transition active:scale-95">
                     Batal
                 </button>
-                <button type="button" id="btnSaveCrop" onclick="uploadCroppedImage()" class="flex-1 py-3 bg-primary text-surface rounded-xl text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2">
+                <button type="button" id="btnSaveCrop" onclick="uploadCroppedImage()" class="flex-1 py-3 bg-primary text-surface rounded-xl text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2 active:scale-95">
                     <i data-lucide="check" class="w-4 h-4"></i> Simpan Foto
                 </button>
             </div>

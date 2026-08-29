@@ -87,7 +87,7 @@ require_once __DIR__ . '/components/sidebar.php';
             <?php require_once __DIR__ . '/components/header.php'; ?>
         </div>
 
-        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full max-w-2xl mx-auto">
+        <div class="px-5 md:px-0 mt-6 md:mt-2 w-full mx-auto">
             
             <!-- Judul & Back Button -->
             <div class="flex items-center gap-3 px-1 mb-6">
@@ -108,7 +108,7 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <!-- Form Card -->
-            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm p-6 md:p-8 space-y-6">
+            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm space-y-6">
                 
                 <?php if ($is_forced): ?>
                 <div class="bg-pending/10 border border-pending/20 p-4 rounded-xl flex gap-3 items-start">
