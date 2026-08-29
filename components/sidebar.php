@@ -126,11 +126,22 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
         </a>
         <?php endif; ?>
 
+        <!-- ================= FINANCE MENU ================= -->
+        <?php if ($sb_role_name === 'finance'): ?>
+        <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Finance Menu</div>
+        <a href="<?= $base_url ?? '' ?>/payslips" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= (in_array($current_page, ['payslips', 'payslips_detail'])) ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="banknote" class="w-4 h-4"></i> Daftar Payroll
+        </a>
+        <a href="<?= $base_url ?? '' ?>/reimbursement" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= (in_array($current_page, ['reimbursement', 'reimbursement_add'])) ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="receipt" class="w-4 h-4"></i> Approval Klaim
+        </a>
+        <?php endif; ?>
+
     </nav>
     
     <!-- Profil & Keluar (Tetap diam di paling bawah tanpa perlu di-scroll) -->
     <div class="p-3 border-t border-gray-100 space-y-1 shrink-0 bg-surface">
-        <a href="<?= $base_url ?? '' ?>/profile" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'profile') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+        <a href="<?= $base_url ?? '' ?>/profile" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= (in_array($current_page, ['profile', 'profile_edit', 'change_password'])) ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
             <i data-lucide="user" class="w-4 h-4"></i> Profil Saya
         </a>
         <a href="<?= $base_url ?? '' ?>/logout" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-failed/10 hover:text-failed rounded-xl text-sm font-medium transition">
