@@ -3,8 +3,29 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
+// ==============================================================================
+// LOGIKA HAK AKSES (ROLE-BASED) & GUARD HALAMAN
+// ==============================================================================
+$role_id = $_SESSION['role_id'] ?? null;
+$role_name_session = strtolower($_SESSION['role'] ?? '');
+
+// Guard Halaman: Hanya Role 1 (Superadmin), 2 (Admin), 3 (HR), dan 6 (Finance) yang boleh akses
+$allowed_role_ids = [1, 2, 3, 6];
+$allowed_role_names = ['superadmin', 'admin', 'hr', 'finance'];
+
+if (!in_array($role_id, $allowed_role_ids) && !in_array($role_name_session, $allowed_role_names)) {
+    $_SESSION['toast_msg'] = "Anda tidak memiliki akses ke halaman Detail Payroll.";
+    $_SESSION['toast_type'] = "error";
+    header("Location: " . ($base_url ?? '') . "/index");
+    exit;
+}
+
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
+
+// Hak view & manage sudah terjamin karena sudah melewati guard di atas
+$can_view_all = true;
+$can_manage_payroll = true;
 
 // Guard: Parameter wajib
 if (!isset($_GET['month']) || !isset($_GET['year'])) {
@@ -16,10 +37,6 @@ $month = (int)$_GET['month'];
 $year = (int)$_GET['year'];
 $month_names = [1=>'Januari', 2=>'Februari', 3=>'Maret', 4=>'April', 5=>'Mei', 6=>'Juni', 7=>'Juli', 8=>'Agustus', 9=>'September', 10=>'Oktober', 11=>'November', 12=>'Desember'];
 $period_str = $month_names[$month] . " " . $year;
-
-$role_name_session = strtolower($_SESSION['role'] ?? '');
-$can_view_all = in_array($role_name_session, ['admin', 'superadmin', 'hr', 'finance', 'manager']);
-$can_manage_payroll = in_array($role_name_session, ['admin', 'superadmin', 'hr', 'finance']);
 
 // ==========================================
 // PENANGANAN AJAX: POST SAJA AGAR AMAN DARI URL REWRITE
@@ -41,6 +58,9 @@ if (isset($_POST['ajax_action'])) {
             WHERE p.id = ? AND p.tenant_id = ?
         ";
         $params = [$id, $tenant_id];
+        
+        // Note: Karena $can_view_all selalu true di halaman ini, filter user_id dihapus. 
+        // Namun demi kejelasan, kami biarkan strukturnya fleksibel.
         if (!$can_view_all) { $query .= " AND p.user_id = ?"; $params[] = $user_id; }
         
         $stmt = $pdo->prepare($query);

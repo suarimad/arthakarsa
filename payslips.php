@@ -3,18 +3,32 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/components/auth.php';
 
+// ==============================================================================
+// LOGIKA HAK AKSES (ROLE-BASED) & GUARD HALAMAN
+// ==============================================================================
+$role_id = $_SESSION['role_id'] ?? null;
+$role_name_session = strtolower($_SESSION['role'] ?? '');
+
+// Guard Halaman: Hanya Role 1 (Superadmin), 2 (Admin), 3 (HR), dan 6 (Finance) yang boleh akses
+$allowed_role_ids = [1, 2, 3, 6];
+$allowed_role_names = ['superadmin', 'admin', 'hr', 'finance'];
+
+if (!in_array($role_id, $allowed_role_ids) && !in_array($role_name_session, $allowed_role_names)) {
+    $_SESSION['toast_msg'] = "Anda tidak memiliki akses ke halaman Payroll.";
+    $_SESSION['toast_type'] = "error";
+    header("Location: " . ($base_url ?? '') . "/index");
+    exit;
+}
+
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
 
-// ==============================================================================
-// LOGIKA HAK AKSES (ROLE-BASED)
-// ==============================================================================
-$role_name_session = strtolower($_SESSION['role'] ?? '');
-$can_view_all = in_array($role_name_session, ['admin', 'superadmin', 'hr', 'finance', 'manager']);
-$can_manage_payroll = in_array($role_name_session, ['admin', 'superadmin', 'hr', 'finance']);
+// Hak view & manage (Karena sudah di-guard, pada dasarnya semua yang masuk halaman ini punya hak ini)
+$can_view_all = true;
+$can_manage_payroll = true;
 
 // ==============================================================================
-// PENANGANAN AJAX GENERATE PAYROLL (KHUSUS HR/FINANCE)
+// PENANGANAN AJAX GENERATE PAYROLL (KHUSUS HR/FINANCE/ADMIN/SUPERADMIN)
 // ==============================================================================
 if (isset($_REQUEST['ajax_action']) && $_REQUEST['ajax_action'] === 'generate') {
     header('Content-Type: application/json');
