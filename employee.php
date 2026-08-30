@@ -189,7 +189,7 @@ require_once __DIR__ . '/components/sidebar.php';
             // ============================================================
             
             $prof_name = htmlspecialchars($profile_data['name']);
-            $prof_avatar = !empty($profile_data['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($profile_data['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($prof_name);
+            $prof_avatar = !empty($profile_data['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($profile_data['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($prof_name);
             $prof_email = htmlspecialchars($profile_data['email']);
             $prof_wa = htmlspecialchars($profile_data['whatsapp'] ?? '-');
             $prof_dept = htmlspecialchars($profile_data['department_name'] ?? 'Belum ada departemen');
@@ -204,7 +204,7 @@ require_once __DIR__ . '/components/sidebar.php';
 
             // Format Manager
             $mgr_name = htmlspecialchars($profile_data['manager_name'] ?? 'Tidak ada atasan');
-            $mgr_avatar = !empty($profile_data['manager_avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($profile_data['manager_avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($mgr_name);
+            $mgr_avatar = !empty($profile_data['manager_avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($profile_data['manager_avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($mgr_name);
 
             // Bersihkan format WA untuk link API
             $wa_clean = preg_replace('/[^0-9]/', '', $profile_data['whatsapp'] ?? '');
@@ -342,7 +342,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 </h3>
                 <div class="flex overflow-x-auto gap-3 pb-2 px-1" style="scrollbar-width: none;">
                     <?php foreach($absentEmployees as $absent): 
-                        $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($absent['name']);
+                        $abs_avatar = !empty($absent['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($absent['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($absent['name']);
                         $abs_position = htmlspecialchars($absent['position_name'] ?? $absent['role_display'] ?? ucfirst($absent['role_name'] ?? 'Employee'));
                         $abs_department = htmlspecialchars($absent['department_name'] ?? 'Belum ada departemen');
                     ?>

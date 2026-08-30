@@ -259,7 +259,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                         <?php foreach($leave_requests as $lr): 
                                             $safe_name = htmlspecialchars($lr['employee_name'] ?? 'Unknown');
                                             $dept_name = htmlspecialchars($lr['department_name'] ?? '-');
-                                            $avatar = !empty($lr['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($lr['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
+                                            $avatar = !empty($lr['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($lr['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($safe_name);
                                             
                                             $start = date('d M Y', strtotime($lr['start_date']));
                                             $end = date('d M Y', strtotime($lr['end_date']));

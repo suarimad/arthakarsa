@@ -106,7 +106,7 @@ try {
 // PERBAIKAN iOS PWA: Tambahkan $base_url
 $profile_avatar_url = !empty($user_avatar) 
     ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($user_avatar) 
-    : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($user_name);
+    : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($user_name);
 
 $user_role = $user_pos;
 $tenant_name = $tenant_name_display;

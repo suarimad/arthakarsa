@@ -243,7 +243,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                         <?php foreach($overtime_requests as $or): 
                                             $safe_name = htmlspecialchars($or['employee_name'] ?? 'Unknown');
                                             $dept_name = htmlspecialchars($or['department_name'] ?? '-');
-                                            $avatar = !empty($or['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($or['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
+                                            $avatar = !empty($or['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($or['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($safe_name);
                                             
                                             $date_str = date('d M Y', strtotime($or['date']));
                                             $time_str = date('H:i', strtotime($or['start_time'])) . ' - ' . date('H:i', strtotime($or['end_time']));

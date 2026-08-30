@@ -188,7 +188,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                         <?php foreach($attendances as $att): 
                                             $safe_name = htmlspecialchars($att['employee_name'] ?? 'Unknown');
                                             $dept_name = htmlspecialchars($att['department_name'] ?? '-');
-                                            $avatar = !empty($att['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($att['avatar']) : "https://api.dicebear.com/9.x/pixel-art/svg?seed=" . urlencode($safe_name);
+                                            $avatar = !empty($att['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($att['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($safe_name);
                                             
                                             // Format Waktu
                                             $date_display = date('d M Y', strtotime($att['date']));
