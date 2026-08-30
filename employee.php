@@ -372,7 +372,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 <div class="md:col-span-3 space-y-5 md:space-y-6">
                     
                     <?php if($currentUser): 
-                        $curr_avatar = !empty($currentUser['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($currentUser['name']);
+                        $curr_avatar = !empty($currentUser['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($currentUser['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($currentUser['name']);
                         $curr_position = htmlspecialchars($currentUser['position_name'] ?? $currentUser['role_display'] ?? ucfirst($currentUser['role_name'] ?? 'Employee'));
                         $curr_department = htmlspecialchars($currentUser['department_name'] ?? 'Belum ada departemen');
                     ?>
@@ -419,7 +419,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         <!-- Kontainer AJAX Render -->
                         <div id="employeeListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 relative z-0 pb-12">
                             <?php foreach($otherEmployees as $emp): 
-                                $emp_avatar = !empty($emp['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($emp['name']);
+                                $emp_avatar = !empty($emp['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($emp['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($emp['name']);
                                 $emp_position = htmlspecialchars($emp['position_name'] ?? $emp['role_display'] ?? ucfirst($emp['role_name'] ?? 'Employee'));
                                 $emp_department = htmlspecialchars($emp['department_name'] ?? 'Belum ada departemen');
                             ?>
