@@ -497,7 +497,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 
                 <p id="attDisclaimer" class="text-[10px] text-gray-500 font-medium italic flex items-center justify-center gap-1.5">
                     <i data-lucide="shield-check" class="w-3.5 h-3.5 text-success"></i> 
-                    Disclaimer: Foto tidak akan disimpan
+                    Pastikan berada di tempat dengan cahaya bagus
                 </p>
             </div>
         </div>

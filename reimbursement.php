@@ -12,25 +12,10 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
-// Generate waktu DATETIME saat ini berdasarkan timezone tenant
 $current_time = date('Y-m-d H:i:s');
 
 // ==============================================================================
-// LOGIKA HAK AKSES (ROLE-BASED) - DITAMBAHKAN ROLE 'finance'
-// ==============================================================================
-$role_name_session = strtolower($_SESSION['role'] ?? '');
-
-// 1. Hak Melihat Semua Data (Admin, Superadmin, HR, Manager, Finance)
-$can_view_all = in_array($role_name_session, ['admin', 'superadmin', 'hr', 'manager', 'finance']);
-
-// 2. Hak Persetujuan / Approval (Admin, Superadmin, HR, Manager, Finance)
-$can_approve = in_array($role_name_session, ['admin', 'superadmin', 'hr', 'manager', 'finance']);
-
-// 3. Hak Menghapus Semua Data (Hanya Admin, Superadmin, HR)
-$can_delete_all = in_array($role_name_session, ['admin', 'superadmin', 'hr']);
-
-// ==============================================================================
-// PENANGANAN AJAX (VIEW DETAIL, APPROVE, REJECT, DELETE)
+// PENANGANAN AJAX (VIEW DETAIL & DELETE/CANCEL PRIBADI)
 // ==============================================================================
 if (isset($_REQUEST['ajax_action'])) {
     header('Content-Type: application/json');
@@ -38,7 +23,7 @@ if (isset($_REQUEST['ajax_action'])) {
     try {
         $action = $_REQUEST['ajax_action'];
 
-        // AJAX 1: VIEW DETAIL (Menggunakan $_REQUEST agar mendukung POST)
+        // AJAX 1: VIEW DETAIL PRIBADI
         if ($action === 'view') {
             $id = $_REQUEST['id'];
             
@@ -49,17 +34,10 @@ if (isset($_REQUEST['ajax_action'])) {
                 LEFT JOIN positions p ON u.position_id = p.id
                 LEFT JOIN departments d ON p.department_id = d.id
                 LEFT JOIN users a ON r.approved_by = a.id
-                WHERE r.id = ? AND r.tenant_id = ?
+                WHERE r.id = ? AND r.tenant_id = ? AND r.user_id = ?
             ";
-            $params = [$id, $tenant_id];
-            
-            if (!$can_view_all) {
-                $query .= " AND r.user_id = ?";
-                $params[] = $user_id;
-            }
-            
             $stmt = $pdo->prepare($query);
-            $stmt->execute($params);
+            $stmt->execute([$id, $tenant_id, $user_id]);
             $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($data) {
@@ -70,49 +48,29 @@ if (isset($_REQUEST['ajax_action'])) {
             exit;
         }
 
-        // AJAX 2: APPROVE / REJECT / DELETE (POST)
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // AJAX 2: DELETE / BATALKAN PENGAJUAN (Hanya yang statusnya masih pending)
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'delete') {
             $id = $_POST['id'];
 
-            // PROSES DELETE (SOFT DELETE DENGAN DATETIME EKSPLISIT)
-            if ($action === 'delete') {
-                $stmt = $pdo->prepare("SELECT user_id, status FROM reimbursement_requests WHERE id = ? AND tenant_id = ?");
-                $stmt->execute([$id, $tenant_id]);
-                $req = $stmt->fetch();
+            $stmt = $pdo->prepare("SELECT status FROM reimbursement_requests WHERE id = ? AND tenant_id = ? AND user_id = ?");
+            $stmt->execute([$id, $tenant_id, $user_id]);
+            $req = $stmt->fetch();
 
-                if ($req) {
-                    if ($can_delete_all || ($req['user_id'] == $user_id && $req['status'] === 'pending')) {
-                        $pdo->prepare("UPDATE reimbursement_requests SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
-                            ->execute([$current_time, $current_time, $id, $tenant_id]);
+            if ($req) {
+                if ($req['status'] === 'pending') {
+                    $pdo->prepare("UPDATE reimbursement_requests SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ? AND user_id = ?")
+                        ->execute([$current_time, $current_time, $id, $tenant_id, $user_id]);
 
-                        $_SESSION['toast_msg'] = "Data dihapus.";
-                        $_SESSION['toast_type'] = "success";
-                        echo json_encode(['status' => 'success']);
-                    } else {
-                        echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki hak untuk menghapus data ini.']);
-                    }
+                    $_SESSION['toast_msg'] = "Pengajuan klaim berhasil dibatalkan.";
+                    $_SESSION['toast_type'] = "success";
+                    echo json_encode(['status' => 'success']);
                 } else {
-                    echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan.']);
+                    echo json_encode(['status' => 'error', 'message' => 'Hanya pengajuan dengan status Menunggu yang dapat dibatalkan.']);
                 }
-                exit;
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan.']);
             }
-
-            // PROSES APPROVE / REJECT
-            if (in_array($action, ['approve', 'reject'])) {
-                if (!$can_approve) throw new Exception("Anda tidak memiliki akses untuk menyetujui/menolak pengajuan.");
-                
-                $status = ($action === 'approve') ? 'approved' : 'rejected';
-                $note = $_POST['note'] ?? null;
-
-                // Update status dan waktu dengan Datetime eksplisit sesuai timezone tenant
-                $pdo->prepare("UPDATE reimbursement_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
-                    ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
-
-                $_SESSION['toast_msg'] = "Klaim reimbursement berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
-                $_SESSION['toast_type'] = "success";
-                echo json_encode(['status' => 'success']);
-                exit;
-            }
+            exit;
         }
     } catch (Exception $e) {
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
@@ -125,23 +83,19 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// MENGAMBIL DATA REIMBURSEMENT UNTUK DATATABLES (Urutan Terbaru)
+// MENGAMBIL DATA PENGAJUAN REIMBURSE PRIBADI UNTUK DATATABLES
 $base_query = "
     SELECT r.*, u.name as employee_name, u.avatar, d.name as department_name
     FROM reimbursement_requests r 
     LEFT JOIN users u ON r.user_id = u.id 
     LEFT JOIN positions p ON u.position_id = p.id
     LEFT JOIN departments d ON p.department_id = d.id
-    WHERE r.tenant_id = ? AND r.deleted_at IS NULL 
+    WHERE r.tenant_id = ? AND r.user_id = ? AND r.deleted_at IS NULL 
+    ORDER BY r.created_at DESC
 ";
 
-if ($can_view_all) {
-    $stmt = $pdo->prepare($base_query . " ORDER BY r.created_at DESC");
-    $stmt->execute([$tenant_id]);
-} else {
-    $stmt = $pdo->prepare($base_query . " AND r.user_id = ? ORDER BY r.created_at DESC");
-    $stmt->execute([$tenant_id, $user_id]);
-}
+$stmt = $pdo->prepare($base_query);
+$stmt->execute([$tenant_id, $user_id]);
 $reimbursement_requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/components/head.php';
@@ -163,9 +117,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     .dataTables_paginate .paginate_button.current { background: #ea3800 !important; color: white !important; border-color: #ea3800 !important; }
     .dataTables_paginate .paginate_button.disabled { opacity: 0.5; cursor: not-allowed; }
     
-    div[id*="toast"], div[class*="toast"], #toast-container {
-        z-index: 999999 !important;
-    }
+    div[id*="toast"], div[class*="toast"], #toast-container { z-index: 999999 !important; }
 </style>
 
 <?php require_once __DIR__ . '/components/sidebar.php'; ?>
@@ -179,18 +131,17 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             
             <div class="flex justify-between items-center px-1">
                 <div>
-                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Klaim Reimbursement</h2>
-                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan klaim pengeluaran (reimburse)</p>
+                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Riwayat Reimburse</h2>
+                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan klaim dana Anda</p>
                 </div>
                 <a href="reimbursement_add" class="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
-                    <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Buat Klaim</span>
+                    <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Ajukan Klaim</span>
                 </a>
             </div>
 
-            <!-- Form Pencarian -->
             <div class="relative z-0">
                 <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                <input type="text" id="dtSearchInput" placeholder="Cari nama karyawan, jenis klaim, atau status..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
+                <input type="text" id="dtSearchInput" placeholder="Cari kategori atau status..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
 
             <div class="md:grid md:grid-cols-3 md:gap-6">
@@ -199,32 +150,31 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                     <section class="relative z-0">
                         <div class="bg-surface md:border border-gray-100 rounded-2xl md:shadow-sm overflow-hidden pb-2 md:pb-0">
                             <div class="overflow-x-auto">
-                                <table id="reimbursementTable" class="w-full text-left whitespace-nowrap">
+                                <table id="reimburseTable" class="w-full text-left whitespace-nowrap">
                                     <thead>
                                         <tr>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Karyawan</th>
-                                            <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Jenis & Tanggal</th>
+                                            <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tanggal & Kategori</th>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right">Nominal</th>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
                                             <th class="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach($reimbursement_requests as $r): 
-                                            $safe_name = htmlspecialchars($r['employee_name'] ?? 'Unknown');
-                                            $dept_name = htmlspecialchars($r['department_name'] ?? '-');
-                                            $avatar = !empty($r['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($r['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
+                                        <?php foreach($reimbursement_requests as $rm): 
+                                            $safe_name = htmlspecialchars($rm['employee_name'] ?? 'Unknown');
+                                            $dept_name = htmlspecialchars($rm['department_name'] ?? '-');
+                                            $avatar = !empty($rm['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($rm['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
                                             
-                                            $date_str = date('d M Y', strtotime($r['date']));
-                                            $amount_str = "Rp " . number_format($r['amount'], 0, ',', '.');
-                                            $type_str = htmlspecialchars($r['type']);
+                                            $date_str = date('d M Y', strtotime($rm['date']));
+                                            $category = htmlspecialchars($rm['category'] ?? 'Lainnya');
+                                            $amount_str = "Rp " . number_format($rm['amount'], 0, ',', '.');
 
-                                            $status = strtolower($r['status']);
+                                            $status = strtolower($rm['status']);
                                             $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Unknown';
                                             if ($status === 'pending') { $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu'; }
                                             if ($status === 'approved') { $badge_bg = 'bg-success/10'; $badge_text = 'text-success'; $badge_label = 'Disetujui'; }
                                             if ($status === 'rejected') { $badge_bg = 'bg-failed/10'; $badge_text = 'text-failed'; $badge_label = 'Ditolak'; }
-                                            if ($status === 'paid') { $badge_bg = 'bg-blue-100'; $badge_text = 'text-blue-600'; $badge_label = 'Dibayar'; }
                                             if ($status === 'canceled') { $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Dibatalkan'; }
                                         ?>
                                             <tr class="hover:bg-gray-50/50 transition-colors group">
@@ -242,7 +192,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                 
                                                 <td>
                                                     <div class="flex flex-col gap-1 items-start">
-                                                        <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5"><i data-lucide="receipt" class="w-3.5 h-3.5 text-primary"></i> <?= $type_str ?></span>
+                                                        <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5 capitalize"><i data-lucide="receipt" class="w-3.5 h-3.5 text-primary"></i> <?= $category ?></span>
                                                         <span class="text-[10px] font-medium text-gray-500"><?= $date_str ?></span>
                                                     </div>
                                                 </td>
@@ -257,21 +207,12 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                 
                                                 <td class="text-right">
                                                     <div class="flex items-center justify-end gap-1.5">
-                                                        <button onclick="openViewModal(<?= $r['id'] ?>)" class="p-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-primary hover:text-white transition shadow-sm active:scale-95" title="Lihat Detail">
+                                                        <button onclick="openViewModal(<?= $rm['id'] ?>)" class="p-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-primary hover:text-white transition shadow-sm active:scale-95" title="Lihat Detail">
                                                             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                                         </button>
                                                         
-                                                        <?php if ($can_approve && $status === 'pending'): ?>
-                                                            <button onclick="openConfirmModal(<?= $r['id'] ?>, 'approve')" class="p-2 bg-success/10 text-success rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-success hover:text-white transition shadow-sm active:scale-95" title="Setujui">
-                                                                <i data-lucide="check" class="w-3.5 h-3.5"></i>
-                                                            </button>
-                                                            <button onclick="openConfirmModal(<?= $r['id'] ?>, 'reject')" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Tolak">
-                                                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                                                            </button>
-                                                        <?php endif; ?>
-
-                                                        <?php if ($can_delete_all || ($r['user_id'] == $user_id && $status === 'pending')): ?>
-                                                            <button onclick="deleteReimbursement(<?= $r['id'] ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Hapus Pengajuan">
+                                                        <?php if ($status === 'pending'): ?>
+                                                            <button onclick="deleteReimbursement(<?= $rm['id'] ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Batalkan Pengajuan">
                                                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                                             </button>
                                                         <?php endif; ?>
@@ -294,72 +235,54 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
 <!-- ================= HYBRID MODAL/BOTTOM SHEET (VIEW DETAIL) ================= -->
 <div id="crudModal" class="fixed inset-0 hidden" style="z-index: 99998;">
     <div id="crudOverlay" onclick="closeCrud()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
-    
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
         <div id="crudCard" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh]">
-            
             <div class="pt-5 pb-2 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeCrud()">
                 <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
-            
             <button onclick="closeCrud()" class="hidden md:flex absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-50 hover:bg-gray-200 transition p-1.5 rounded-full z-10">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
-            
             <div id="crudContent" class="px-6 pb-8 md:p-8 overflow-y-auto"></div>
         </div>
     </div>
 </div>
 
-<!-- ================= MODAL KONFIRMASI APPROVE/REJECT/DELETE ================= -->
+<!-- ================= MODAL KONFIRMASI DELETE ================= -->
 <div id="confirmModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <div id="confirmOverlay" onclick="closeConfirm()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
-    
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
         <div id="confirmCard" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh] p-6">
-            
             <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeConfirm()">
                 <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
-            
             <div id="confirmContent"></div>
         </div>
     </div>
 </div>
 
 <?php require_once __DIR__ . '/components/bottom-nav.php'; ?>
-
-<!-- Komponen Toast Global -->
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
     lucide.createIcons();
 
-    const canApprove = <?= $can_approve ? 'true' : 'false' ?>;
+    const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
 
     $(document).ready(function() {
-        const table = $('#reimbursementTable').DataTable({
+        const table = $('#reimburseTable').DataTable({
             "dom": 't<"bottom"ip>', 
             "pageLength": 10,
             "ordering": false,
             "language": {
-                "emptyTable": "Belum ada riwayat klaim",
+                "emptyTable": "Belum ada riwayat pengajuan reimburse",
                 "info": "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
                 "infoEmpty": "Menampilkan 0 s/d 0 dari 0 data",
-                "paginate": {
-                    "previous": "Sebelumnya",
-                    "next": "Selanjutnya"
-                }
+                "paginate": { "previous": "Sebelumnya", "next": "Selanjutnya" }
             }
         });
-
-        $('#dtSearchInput').on('keyup', function() {
-            table.search(this.value).draw();
-        });
-
-        table.on('draw', function() {
-            lucide.createIcons();
-        });
+        $('#dtSearchInput').on('keyup', function() { table.search(this.value).draw(); });
+        table.on('draw', function() { lucide.createIcons(); });
     });
 
     const crudModal = document.getElementById('crudModal');
@@ -371,12 +294,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     document.body.appendChild(crudModal);
 
     window.openViewModal = function(id) {
-        crudContent.innerHTML = `
-            <div class="flex justify-center py-10">
-                <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i>
-            </div>
-        `;
-        
+        crudContent.innerHTML = `<div class="flex justify-center py-10"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i></div>`;
         crudModal.classList.remove('hidden');
         lucide.createIcons();
         
@@ -395,51 +313,30 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             .then(res => {
                 if(res.status === 'success') {
                     const data = res.data;
-                    
                     const formatDate = (dateStr) => {
                         const d = new Date(dateStr);
                         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
                     };
-                    const formatRp = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(data.amount);
 
-                    const attUrl = data.attachment ? `${baseUrl}/assets/img/reimbursement_requests/${data.attachment}` : null;
-                    
+                    const attUrl = data.attachment ? `${baseUrl}/assets/img/reimbursements/${data.attachment}` : null;
                     let attachmentHtml = attUrl 
-                        ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Bukti Nota / Struk</a>` 
-                        : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran struk</p>';
+                        ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Bukti Nota</a>` 
+                        : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran nota</p>';
 
-                    // STATUS BADGE DI MODAL DETAIL
                     let statusBadge = '';
                     const st = (data.status || '').toLowerCase();
                     if (st === 'pending') statusBadge = '<span class="px-2.5 py-1 bg-pending/10 text-pending font-bold text-[10px] rounded-md uppercase tracking-wider">Menunggu</span>';
                     else if (st === 'approved') statusBadge = '<span class="px-2.5 py-1 bg-success/10 text-success font-bold text-[10px] rounded-md uppercase tracking-wider">Disetujui</span>';
                     else if (st === 'rejected') statusBadge = '<span class="px-2.5 py-1 bg-failed/10 text-failed font-bold text-[10px] rounded-md uppercase tracking-wider">Ditolak</span>';
-                    else if (st === 'paid') statusBadge = '<span class="px-2.5 py-1 bg-blue-100 text-blue-600 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibayar</span>';
                     else if (st === 'canceled') statusBadge = '<span class="px-2.5 py-1 bg-gray-100 text-gray-500 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibatalkan</span>';
 
-                    let actionButtons = '';
-                    if (canApprove && data.status === 'pending') {
-                        actionButtons = `
-                            <div class="flex gap-3 mt-6 border-t border-gray-100 pt-6">
-                                <button onclick="openConfirmModal(${data.id}, 'reject')" class="flex-1 py-3 bg-failed/10 text-failed rounded-xl text-sm font-bold hover:bg-failed hover:text-white transition active:scale-95 shadow-sm">Tolak</button>
-                                <button onclick="openConfirmModal(${data.id}, 'approve')" class="flex-1 py-3 bg-success/10 text-success rounded-xl text-sm font-bold hover:bg-success hover:text-white transition active:scale-95 shadow-sm">Setujui</button>
-                            </div>
-                        `;
-                    }
-
-                    let rejectNoteHtml = data.rejection_note 
-                        ? `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Alasan Penolakan:</p><p class="text-xs font-medium text-gray-700">${data.rejection_note}</p></div>` 
-                        : '';
-                    
-                    let approverHtml = data.approver_name 
-                        ? `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>` 
-                        : '';
-
+                    let rejectNoteHtml = data.rejection_note ? `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Alasan Penolakan:</p><p class="text-xs font-medium text-gray-700">${data.rejection_note}</p></div>` : '';
+                    let approverHtml = data.approver_name ? `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>` : '';
                     if(data.status === 'rejected') approverHtml = '';
 
                     crudContent.innerHTML = `
                         <div class="text-center mb-6 mt-2 md:mt-0">
-                            <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Reimbursement</h3>
+                            <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Klaim Reimburse</h3>
                             <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
                             <div class="mt-3">${statusBadge}</div>
                         </div>
@@ -447,23 +344,23 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         <div class="space-y-4">
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tgl Nota</p>
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tgl Transaksi</p>
                                     <p class="text-xs font-bold text-gray-800 mt-1">${formatDate(data.date)}</p>
                                 </div>
                                 <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
                                     <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Kategori</p>
-                                    <p class="text-xs font-bold text-gray-800 mt-1">${data.type}</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1 capitalize">${data.category}</p>
                                 </div>
                             </div>
                             
-                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Nominal Klaim</p>
-                                <p class="text-sm font-bold text-primary mt-1">${formatRp}</p>
+                            <div class="bg-primary/5 border border-primary/20 p-4 rounded-xl shadow-sm text-center">
+                                <p class="text-[10px] font-bold text-primary uppercase tracking-wider">Total Nominal</p>
+                                <p class="text-xl font-black text-primary mt-1">${formatRp(data.amount)}</p>
                             </div>
                             
                             <div class="bg-gray-50 border border-gray-100 p-4 rounded-xl shadow-sm">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Keterangan Pengeluaran</p>
-                                <p class="text-xs font-medium text-gray-700 leading-relaxed">${data.description}</p>
+                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Keterangan / Keperluan</p>
+                                <p class="text-xs font-medium text-gray-700 leading-relaxed">${data.description || '-'}</p>
                                 ${attachmentHtml}
                             </div>
                             
@@ -471,9 +368,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                             ${rejectNoteHtml}
                         </div>
                         
-                        ${actionButtons}
-                        
-                        <button onclick="closeCrud()" class="w-full mt-4 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition active:scale-95 shadow-sm">Tutup Detail</button>
+                        <button onclick="closeCrud()" class="w-full mt-6 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition active:scale-95 shadow-sm">Tutup Detail</button>
                     `;
                     lucide.createIcons();
                 } else {
@@ -498,64 +393,18 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     const confirmContent = document.getElementById('confirmContent');
     document.body.appendChild(confirmModal);
 
-    window.openConfirmModal = function(id, action) {
-        closeCrud();
-        
-        setTimeout(() => {
-            let title = action === 'approve' ? 'Konfirmasi Persetujuan' : 'Konfirmasi Penolakan';
-            let desc = action === 'approve' ? 'Apakah Anda yakin ingin menyetujui klaim reimbursement ini?' : 'Apakah Anda yakin ingin menolak klaim reimbursement ini?';
-            let iconClass = action === 'approve' ? 'bg-success/10 text-success' : 'bg-failed/10 text-failed';
-            let iconType = action === 'approve' ? 'check' : 'x';
-            let btnClass = action === 'approve' ? 'bg-success hover:bg-success/90' : 'bg-failed hover:bg-failed/90';
-            let btnText = action === 'approve' ? 'Ya, Setujui' : 'Ya, Tolak';
-
-            let inputHtml = action === 'reject' ? `
-                <div class="mt-4 text-left">
-                    <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Alasan Penolakan</label>
-                    <textarea id="rejectionNote" rows="3" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-failed focus:ring-1 focus:ring-failed transition text-xs text-gray-800" placeholder="Wajib diisi..."></textarea>
-                </div>
-            ` : '';
-
-            confirmContent.innerHTML = `
-                <div class="text-center">
-                    <div class="w-12 h-12 rounded-full ${iconClass} mx-auto flex items-center justify-center mb-4">
-                        <i data-lucide="${iconType}" class="w-6 h-6"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-800">${title}</h3>
-                    <p class="text-xs text-gray-500 mt-1 leading-relaxed">${desc}</p>
-                    
-                    ${inputHtml}
-                    
-                    <div class="flex gap-3 mt-8">
-                        <button onclick="closeConfirm()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Batal</button>
-                        <button onclick="submitAction(${id}, '${action}')" class="flex-1 py-3 ${btnClass} text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">${btnText}</button>
-                    </div>
-                </div>
-            `;
-            
-            confirmModal.classList.remove('hidden');
-            lucide.createIcons();
-            
-            setTimeout(() => {
-                confirmOverlay.classList.remove('opacity-0');
-                confirmCard.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
-                confirmCard.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
-            }, 10);
-        }, 300);
-    }
-
     window.deleteReimbursement = function(id) {
         confirmContent.innerHTML = `
             <div class="text-center">
                 <div class="w-12 h-12 rounded-full bg-failed/10 text-failed mx-auto flex items-center justify-center mb-4">
                     <i data-lucide="trash-2" class="w-6 h-6"></i>
                 </div>
-                <h3 class="text-lg font-bold text-gray-800">Hapus Klaim</h3>
-                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin menghapus atau membatalkan klaim ini secara permanen?</p>
+                <h3 class="text-lg font-bold text-gray-800">Batalkan Pengajuan</h3>
+                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin membatalkan pengajuan reimburse ini?</p>
                 
                 <div class="flex gap-3 mt-8">
                     <button onclick="closeConfirm()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Batal</button>
-                    <button onclick="submitAction(${id}, 'delete')" class="flex-1 py-3 bg-failed hover:bg-failed/90 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">Ya, Hapus</button>
+                    <button onclick="submitAction(${id}, 'delete')" class="flex-1 py-3 bg-failed hover:bg-failed/90 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">Ya, Batalkan</button>
                 </div>
             </div>
         `;
@@ -576,32 +425,15 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     }
 
     window.submitAction = function(id, action) {
-        let note = '';
-        if (action === 'reject') {
-            const noteInput = document.getElementById('rejectionNote');
-            note = noteInput.value.trim();
-            
-            if (!note) {
-                if(typeof window.showToast === 'function') window.showToast('Alasan penolakan wajib diisi!', 'warning');
-                noteInput.classList.add('border-failed', 'ring-failed', 'bg-failed/5');
-                noteInput.focus();
-                return;
-            }
-        }
-
         const formData = new FormData();
         formData.append('ajax_action', action);
         formData.append('id', id);
-        if (note) formData.append('note', note);
 
         fetch(window.location.href, { method: 'POST', body: formData })
         .then(res => res.json())
         .then(res => {
-            if (res.status === 'success') {
-                window.location.reload(); 
-            } else {
-                if(typeof window.showToast === 'function') window.showToast(res.message, 'error');
-            }
+            if (res.status === 'success') { window.location.reload(); } 
+            else { if(typeof window.showToast === 'function') window.showToast(res.message, 'error'); }
         }).catch(() => {
             if(typeof window.showToast === 'function') window.showToast("Gagal terhubung ke server", 'error');
         });
