@@ -141,13 +141,13 @@ try {
     $stmtPos->execute([$tenant_id]);
     $positions = $stmtPos->fetchAll(PDO::FETCH_ASSOC);
 
+    // Ambil user dengan Role ID 4 (Manager) ATAU yang tidak memiliki manager_id (manager_id IS NULL)
     $stmtMgr = $pdo->prepare("
         SELECT u.id, u.name, p.department_id, d.name as department_name 
         FROM users u 
         LEFT JOIN positions p ON u.position_id = p.id 
         LEFT JOIN departments d ON p.department_id = d.id
-        LEFT JOIN roles r ON u.role_id = r.id 
-        WHERE u.tenant_id = ? AND r.name = 'manager' AND u.deleted_at IS NULL
+        WHERE u.tenant_id = ? AND (u.role_id = 4 OR u.manager_id IS NULL) AND u.deleted_at IS NULL
         ORDER BY u.name ASC
     ");
     $stmtMgr->execute([$tenant_id]);
@@ -338,10 +338,10 @@ require_once __DIR__ . '/components/sidebar.php';
                                         $mgr_dept = !empty($mgr['department_name']) ? ' - ' . $mgr['department_name'] : ' - Tanpa Departemen';
                                         $mgr_label = $mgr['name'] . $mgr_dept;
                                     ?>
-                                        <option value="<?= $mgr['id'] ?>" data-dept="<?= $mgr['department_id'] ?>" <?= (isset($_POST['manager_id']) && $_POST['manager_id'] == $mgr['id']) ? 'selected' : '' ?>><?= htmlspecialchars($mgr_label) ?></option>
+                                        <option value="<?= $mgr['id'] ?>" <?= (isset($_POST['manager_id']) && $_POST['manager_id'] == $mgr['id']) ? 'selected' : '' ?>><?= htmlspecialchars($mgr_label) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="text-[9px] text-gray-400 mt-1.5">Opsi atasan difilter berdasarkan departemen.</p>
+                                <p class="text-[9px] text-gray-400 mt-1.5">Menampilkan user dengan Role Manager atau yang belum memiliki atasan.</p>
                             </div>
 
                             <div>
@@ -470,12 +470,9 @@ require_once __DIR__ . '/components/sidebar.php';
         // Init Select2
         $('.select2').select2({ width: '100%' });
 
-        // Cascading Department -> Position & Manager
+        // Cascading Department -> Position
         const posSelect = $('#position_id');
         const originalPosOptions = posSelect.find('option').clone(); 
-
-        const mgrSelect = $('#manager_id');
-        const originalMgrOptions = mgrSelect.find('option').clone(); 
 
         function filterDropdowns() {
             const deptId = $('#department_id').val();
@@ -493,31 +490,15 @@ require_once __DIR__ . '/components/sidebar.php';
             } else {
                 posSelect.val("");
             }
-
-            // 2. Filter Managers
-            const currentMgr = mgrSelect.val(); 
-            mgrSelect.empty(); 
-            originalMgrOptions.each(function() {
-                if ($(this).val() === "" || !deptId || $(this).attr('data-dept') === String(deptId)) {
-                    mgrSelect.append($(this).clone());
-                }
-            });
-            if (mgrSelect.find(`option[value="${currentMgr}"]`).length > 0) {
-                mgrSelect.val(currentMgr);
-            } else {
-                mgrSelect.val("");
-            }
         }
 
         $('#department_id').on('change', function() {
             filterDropdowns();
             posSelect.trigger('change.select2'); 
-            mgrSelect.trigger('change.select2');
         });
 
         filterDropdowns();
         posSelect.trigger('change.select2');
-        mgrSelect.trigger('change.select2');
     });
 </script>
 
