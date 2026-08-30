@@ -15,10 +15,33 @@ date_default_timezone_set($tz_setting);
 // Waktu DATETIME berdasarkan timezone tenant
 $current_time = date('Y-m-d H:i:s');
 
+// Helper Notification Functions
+if (!function_exists('notifyRoles')) {
+    function notifyRoles($pdo, $tenant_id, $target_roles = [], $title, $message, $url, $icon = 'bell', $sender_id = 0) {
+        if (empty($target_roles)) return;
+        
+        $placeholders = implode(',', array_fill(0, count($target_roles), '?'));
+        $sql = "SELECT id, tenant_id FROM users WHERE (role_id = 1 OR (tenant_id = ? AND role_id IN ($placeholders))) AND id != ?";
+        $params = array_merge([$tenant_id], $target_roles, [$sender_id]);
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (!empty($users)) {
+            $insertSql = "INSERT INTO notifications (tenant_id, user_id, title, message, url, icon) VALUES (?, ?, ?, ?, ?, ?)";
+            $insertStmt = $pdo->prepare($insertSql);
+            foreach ($users as $u) {
+                $insertStmt->execute([$u['tenant_id'], $u['id'], $title, $message, $url, $icon]);
+            }
+        }
+    }
+}
+
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
 
-// Logika Status & Tombol (Karyawan vs Atasan)
+// Logika Tampilan Tombol (Karyawan vs Atasan)
 $is_employee = ($role_id == 5 || $role_name_session === 'employee');
 
 // ==============================================================================
@@ -33,15 +56,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     $amount = (float)($_POST['amount'] ?? 0); 
     $description = trim($_POST['description'] ?? '');
     
-    $status = $is_employee ? 'pending' : 'approved';
-    
+    // Semua pengajuan reimbursement dari halaman ini selalu berstatus PENDING
+    $status = 'pending';
     $approved_by = null;
     $approved_at = null;
-    
-    if ($status === 'approved') {
-        $approved_by = $user_id;
-        $approved_at = $current_time;
-    }
 
     $today = date('Y-m-d');
 
@@ -152,12 +170,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 throw new Exception("Lampiran struk atau nota wajib diunggah!");
             }
 
-            // Insert Data ke reimbursement_requests dengan Datetime eksplisit
+            $pdo->beginTransaction();
+
+            // 1. Insert Data ke reimbursement_requests dengan Datetime eksplisit
             $stmt = $pdo->prepare("
                 INSERT INTO reimbursement_requests (tenant_id, user_id, date, type, amount, description, attachment, status, approved_by, approved_at, created_at, updated_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([$tenant_id, $user_id, $rb_date, $type, $amount, $description, $attachment, $status, $approved_by, $approved_at, $current_time, $current_time]);
+
+            // 2. SIMPAN NOTIFIKASI KE ROLE 1 (Superadmin), 2 (Admin), 3 (HR), 6 (Finance)
+            $applicant_name = $_SESSION['user_name'] ?? 'Karyawan';
+            $formatted_amount = "Rp " . number_format($amount, 0, ',', '.');
+
+            notifyRoles(
+                $pdo,
+                $tenant_id,
+                [1, 2, 3, 6], // Target Role ID: Superadmin, Admin, HR, Finance
+                "Pengajuan Reimbursement Baru",
+                "{$applicant_name} mengajukan reimbursement senilai {$formatted_amount} .",
+                "approval_reimbursement",
+                "receipt",
+                $user_id
+            );
+
+            $pdo->commit();
 
             $msg = "Klaim berhasil dibuat.";
             
@@ -168,6 +205,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             exit;
 
         } catch (Exception $e) {
+            if (isset($pdo) && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             echo json_encode(['status' => 'error', 'message' => 'Gagal memproses: ' . $e->getMessage()]);
             exit;
         }

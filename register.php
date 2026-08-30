@@ -75,7 +75,7 @@ if (isset($_SESSION['user_id'])) {
             </div>
 
             <button type="submit" class="w-full bg-primary text-surface text-sm font-semibold py-3 rounded-xl mt-6 hover:opacity-90 transition shadow-sm md:shadow-none">
-                Daftar & Buat Akun
+                Daftar & Pilih Paket
             </button>
         </form>
 
@@ -84,7 +84,7 @@ if (isset($_SESSION['user_id'])) {
         </p>
     </div>
 
-    <!-- 1. Memanggil Komponen Toast secara Global -->
+    <!-- Memanggil Komponen Toast secara Global -->
     <?php require_once __DIR__ . '/components/toast.php'; ?>
 
     <script>
@@ -105,12 +105,10 @@ if (isset($_SESSION['user_id'])) {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Redirect ke login, pesan sukses akan ditangkap oleh session dari proses register
-                    setTimeout(() => { window.location.href = 'login'; }, 500);
+                    window.location.href = data.redirect || 'pending_tenant';
                 } else {
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
-                    // Panggil fungsi toast global
                     if(typeof window.showToast === 'function') {
                         window.showToast(data.message, data.status);
                     }

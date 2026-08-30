@@ -315,12 +315,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     document.body.appendChild(crudModal);
 
     window.openViewModal = function(id) {
-        crudContent.innerHTML = `
-            <div class="flex justify-center py-10">
-                <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i>
-            </div>
-        `;
-        
+        crudContent.innerHTML = `<div class="flex justify-center py-10"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i></div>`;
         crudModal.classList.remove('hidden');
         lucide.createIcons();
         
@@ -370,16 +365,19 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         ? `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Alasan Penolakan:</p><p class="text-xs font-medium text-gray-700">${data.rejection_note}</p></div>` 
                         : '';
                     
-                    let approverHtml = data.approver_name 
-                        ? `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>` 
-                        : '';
-
-                    if(data.status === 'rejected') approverHtml = '';
+                    // TAMPILKAN NAMA USER YANG MELAKUKAN APPROVE ATAU REJECT
+                    let approverHtml = '';
+                    if (data.approver_name) {
+                        if (st === 'approved') {
+                            approverHtml = `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>`;
+                        } else if (st === 'rejected') {
+                            approverHtml = `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Ditolak Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>`;
+                        }
+                    }
 
                     crudContent.innerHTML = `
                         <div class="text-center mb-6 mt-2 md:mt-0">
                             <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Pengajuan Lembur</h3>
-                            <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
                             <div class="mt-3">${statusBadge}</div>
                         </div>
                         

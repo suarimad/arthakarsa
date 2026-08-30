@@ -14,6 +14,14 @@ date_default_timezone_set($tz_setting);
 
 $current_time = date('Y-m-d H:i:s');
 
+// Helper Notification Function
+if (!function_exists('notifyUser')) {
+    function notifyUser($pdo, $tenant_id, $target_user_id, $title, $message, $url, $icon = 'bell') {
+        $sql = "INSERT INTO notifications (tenant_id, user_id, title, message, url, icon) VALUES (?, ?, ?, ?, ?, ?)";
+        $pdo->prepare($sql)->execute([$tenant_id, $target_user_id, $title, $message, $url, $icon]);
+    }
+}
+
 // ==============================================================================
 // LOGIKA HAK AKSES (GUARD KHUSUS APPROVAL)
 // ==============================================================================
@@ -103,20 +111,50 @@ if (isset($_REQUEST['ajax_action'])) {
 
                 $pdo->beginTransaction();
 
+                // Ambil data pengajuan & pengaju terlebih dahulu
+                $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ? AND tenant_id = ?");
+                $stmtInfo->execute([$id, $tenant_id]);
+                $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+
+                if (!$info) {
+                    throw new Exception("Data pengajuan tidak ditemukan.");
+                }
+
                 $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
                     ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
 
                 // Update Saldo Cuti jika di-approve
+                if ($action === 'approve' && strtolower($info['type']) === 'cuti') {
+                    $year = date('Y', strtotime($info['start_date']));
+                    $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
+                        ->execute([(int)$info['total_days'], $current_time, $info['user_id'], $year, $tenant_id]);
+                }
+
+                // SIMPAN NOTIFIKASI BALASAN KE USER PENGAJU
+                $approver_name = $_SESSION['user_name'] ?? 'Atasan/HR';
+                $req_type = strtolower($info['type']);
+                $requester_id = $info['user_id'];
+
                 if ($action === 'approve') {
-                    $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ? AND tenant_id = ?");
-                    $stmtInfo->execute([$id, $tenant_id]);
-                    $info = $stmtInfo->fetch();
-                    
-                    if ($info && strtolower($info['type']) === 'cuti') {
-                        $year = date('Y', strtotime($info['start_date']));
-                        $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
-                            ->execute([(int)$info['total_days'], $current_time, $info['user_id'], $year, $tenant_id]);
-                    }
+                    notifyUser(
+                        $pdo,
+                        $tenant_id,
+                        $requester_id,
+                        "Pengajuan Disetujui",
+                        "Pengajuan {$req_type} anda sudah disetujui.",
+                        "leave",
+                        "check-circle"
+                    );
+                } else {
+                    notifyUser(
+                        $pdo,
+                        $tenant_id,
+                        $requester_id,
+                        "Pengajuan Ditolak",
+                        "Mohon maaf pengajuan {$req_type} anda ditolak oleh {$approver_name}",
+                        "leave",
+                        "x-circle"
+                    );
                 }
 
                 $pdo->commit();

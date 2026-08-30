@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $toast_msg = "Semua kolom kata sandi wajib diisi!";
         $toast_type = "warning";
     } elseif ($new_password !== $confirm_password) {
-        $toast_msg = "Konfirmasi kata sandi baru tidak cocok!";
+        $toast_msg = "Konfirmasi kata sandi baru berbeda!";
         $toast_type = "failed";
     } elseif (strlen($new_password) < 8) {
         $toast_msg = "Kata sandi baru minimal 8 karakter!";
@@ -56,13 +56,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 header("Location: index");
                 exit;
             } else {
-                $toast_msg = "Kata sandi saat ini yang Anda masukkan salah!";
+                $toast_msg = "Kata sandi lama yang Anda masukkan salah!";
                 $toast_type = "failed";
             }
         } catch (Exception $e) {
             $toast_msg = "Gagal memperbarui kata sandi: " . $e->getMessage();
             $toast_type = "error";
         }
+    }
+
+    // Set ke session agar dibaca oleh komponen toast
+    if (!empty($toast_msg)) {
+        $_SESSION['toast_msg'] = $toast_msg;
+        $_SESSION['toast_type'] = $toast_type;
     }
 }
 
@@ -108,7 +114,7 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <!-- Form Card -->
-            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm space-y-6">
+            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm p-6 space-y-6">
                 
                 <?php if ($is_forced): ?>
                 <div class="bg-pending/10 border border-pending/20 p-4 rounded-xl flex gap-3 items-start">
@@ -121,7 +127,7 @@ require_once __DIR__ . '/components/sidebar.php';
                 <?php endif; ?>
 
                 <!-- FORM EDIT DATA -->
-                <form method="POST" action="">
+                <form id="changePasswordForm" method="POST" action="">
                     <input type="hidden" name="action" value="change_password">
                     
                     <div class="space-y-4">
@@ -129,19 +135,19 @@ require_once __DIR__ . '/components/sidebar.php';
                         <!-- Current Password -->
                         <div>
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Kata Sandi Saat Ini</label>
-                            <input type="password" name="current_password" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Masukkan kata sandi lama Anda">
+                            <input type="password" id="current_password" name="current_password" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Masukkan kata sandi lama Anda">
                         </div>
 
                         <!-- New Password -->
                         <div>
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Kata Sandi Baru</label>
-                            <input type="password" name="new_password" required minlength="8" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Minimal 8 karakter">
+                            <input type="password" id="new_password" name="new_password" required minlength="8" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Minimal 8 karakter">
                         </div>
 
                         <!-- Confirm Password -->
                         <div>
                             <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Konfirmasi Kata Sandi Baru</label>
-                            <input type="password" name="confirm_password" required minlength="8" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Ketik ulang kata sandi baru Anda">
+                            <input type="password" id="confirm_password" name="confirm_password" required minlength="8" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Ketik ulang kata sandi baru Anda">
                         </div>
 
                     </div>
@@ -171,14 +177,44 @@ require_once __DIR__ . '/components/sidebar.php';
 <?php require_once __DIR__ . '/components/toast.php'; ?>
 
 <script>
-    lucide.createIcons();
+    // Tangkap error Service Worker / Cache secara silent agar tidak memblokir JS lain
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (event.reason.name === 'TypeError' || (event.reason.message && event.reason.message.includes('Cache')))) {
+            event.preventDefault();
+        }
+    });
 
-    const phpMsg = <?= json_encode($toast_msg) ?>;
-    const phpType = <?= json_encode($toast_type) ?>;
-    
-    if (phpMsg && typeof window.showToast === 'function') {
-        window.showToast(phpMsg, phpType);
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+        lucide.createIcons();
+
+        const phpMsg = <?= json_encode($toast_msg) ?>;
+        const phpType = <?= json_encode($toast_type) ?>;
+        
+        if (phpMsg) {
+            if (typeof window.showToast === 'function') {
+                window.showToast(phpMsg, phpType);
+            } else if (typeof showToast === 'function') {
+                showToast(phpMsg, phpType);
+            }
+        }
+
+        const form = document.getElementById('changePasswordForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                const newPassword = document.getElementById('new_password').value;
+                const confirmPassword = document.getElementById('confirm_password').value;
+
+                if (newPassword !== confirmPassword) {
+                    e.preventDefault();
+                    if (typeof window.showToast === 'function') {
+                        window.showToast("Konfirmasi kata sandi baru berbeda!", "failed");
+                    } else if (typeof showToast === 'function') {
+                        showToast("Konfirmasi kata sandi baru berbeda!", "failed");
+                    }
+                }
+            });
+        }
+    });
 </script>
 
 <?php require_once __DIR__ . '/components/pwa_init.php'; ?>

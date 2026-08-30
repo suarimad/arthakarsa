@@ -109,7 +109,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     table.dataTable.no-footer { border-bottom: none !important; }
     table.dataTable thead th { border-bottom: 1px solid #f3f4f6 !important; padding: 0.75rem 1rem !important; background-color: #f9fafb; background-image: none !important; }
     table.dataTable tbody td { border-bottom: 1px solid #f3f4f6 !important; padding: 0.75rem 1rem !important; vertical-align: middle; }
-    .dataTables_wrapper .bottom { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1rem; background-color: #ffffff; border-top: 1px solid #f3f4f6; }
+    .dataTables_wrapper .bottom { display: flex; justify-between: space-between; align-items: center; padding: 1rem 1rem; background-color: #ffffff; border-top: 1px solid #f3f4f6; }
     .dataTables_info { font-size: 0.65rem !important; color: #6b7280 !important; padding-top: 0 !important; }
     .dataTables_paginate { display: flex; gap: 0.25rem; padding-top: 0 !important; }
     .dataTables_paginate .paginate_button { padding: 0.25rem 0.6rem !important; border-radius: 0.5rem !important; font-size: 0.7rem !important; font-weight: 600 !important; background: white !important; border: 1px solid #e5e7eb !important; color: #4b5563 !important; cursor: pointer; margin-left: 0.25rem !important; }
@@ -167,7 +167,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             $avatar = !empty($rm['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($rm['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
                                             
                                             $date_str = date('d M Y', strtotime($rm['date']));
-                                            $category = htmlspecialchars($rm['category'] ?? 'Lainnya');
+                                            $category = htmlspecialchars($rm['type'] ?? 'Lainnya');
                                             $amount_str = "Rp " . number_format($rm['amount'], 0, ',', '.');
 
                                             $status = strtolower($rm['status']);
@@ -237,9 +237,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     <div id="crudOverlay" onclick="closeCrud()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
         <div id="crudCard" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh]">
-            <div class="pt-5 pb-2 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeCrud()">
-                <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
-            </div>
+            <div class="pt-5 pb-2 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeCrud()"><div class="w-12 h-1.5 bg-gray-200 rounded-full"></div></div>
             <button onclick="closeCrud()" class="hidden md:flex absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-50 hover:bg-gray-200 transition p-1.5 rounded-full z-10">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
@@ -253,9 +251,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     <div id="confirmOverlay" onclick="closeConfirm()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     <div class="absolute inset-0 flex items-end md:items-center justify-center pointer-events-none p-0 md:p-4">
         <div id="confirmCard" class="bg-surface w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl transform translate-y-full md:translate-y-0 md:scale-95 opacity-100 md:opacity-0 transition-all duration-300 pointer-events-auto relative flex flex-col max-h-[90vh] p-6">
-            <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeConfirm()">
-                <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
-            </div>
+            <div class="pt-2 pb-4 md:hidden flex justify-center cursor-pointer shrink-0" onclick="closeConfirm()"><div class="w-12 h-1.5 bg-gray-200 rounded-full"></div></div>
             <div id="confirmContent"></div>
         </div>
     </div>
@@ -318,7 +314,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
                     };
 
-                    const attUrl = data.attachment ? `${baseUrl}/assets/img/reimbursements/${data.attachment}` : null;
+                    const attUrl = data.attachment ? `${baseUrl}/assets/img/reimbursement_requests/${data.attachment}` : null;
                     let attachmentHtml = attUrl 
                         ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Bukti Nota</a>` 
                         : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran nota</p>';
@@ -331,13 +327,20 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                     else if (st === 'canceled') statusBadge = '<span class="px-2.5 py-1 bg-gray-100 text-gray-500 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibatalkan</span>';
 
                     let rejectNoteHtml = data.rejection_note ? `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Alasan Penolakan:</p><p class="text-xs font-medium text-gray-700">${data.rejection_note}</p></div>` : '';
-                    let approverHtml = data.approver_name ? `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>` : '';
-                    if(data.status === 'rejected') approverHtml = '';
+                    
+                    // TAMPILKAN NAMA USER YANG MELAKUKAN APPROVE ATAU REJECT
+                    let approverHtml = '';
+                    if (data.approver_name) {
+                        if (st === 'approved') {
+                            approverHtml = `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>`;
+                        } else if (st === 'rejected') {
+                            approverHtml = `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Ditolak Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>`;
+                        }
+                    }
 
                     crudContent.innerHTML = `
                         <div class="text-center mb-6 mt-2 md:mt-0">
                             <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Klaim Reimburse</h3>
-                            <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
                             <div class="mt-3">${statusBadge}</div>
                         </div>
                         
@@ -349,7 +352,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                 </div>
                                 <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
                                     <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Kategori</p>
-                                    <p class="text-xs font-bold text-gray-800 mt-1 capitalize">${data.category}</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1 capitalize">${data.type}</p>
                                 </div>
                             </div>
                             

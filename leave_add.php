@@ -50,15 +50,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     
     $total_days = isset($_POST['total_days']) ? (int)$_POST['total_days'] : 0;
     $reason = trim($_POST['reason'] ?? '');
-    
-    $status = $is_employee ? 'pending' : 'approved';
-    
-    $approved_by = null;
-    $approved_at = null;
-    
-    if ($status === 'approved') {
+
+    // Cari Manager Direct dari User
+    $stmtMgr = $pdo->prepare("SELECT manager_id FROM users WHERE id = ? LIMIT 1");
+    $stmtMgr->execute([$user_id]);
+    $applicant_manager_id = $stmtMgr->fetchColumn();
+
+    // LOGIKA PENENTUAN STATUS (Auto approved HANYA jika BUKAN Employee DAN TIDAK MEMILIKI manager_id)
+    if (!$is_employee && empty($applicant_manager_id)) {
+        $status = 'approved';
         $approved_by = $user_id;
         $approved_at = $current_time;
+    } else {
+        $status = 'pending';
+        $approved_by = null;
+        $approved_at = null;
     }
 
     $today = date('Y-m-d');
@@ -161,19 +167,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 throw new Exception("Surat dokter wajib diunggah!");
             }
 
-            // Insert Data dengan kolom waktu DATETIME eksplisit sesuai timezone tenant
+            $pdo->beginTransaction();
+
+            // 1. Insert Data leave_requests
             $stmt = $pdo->prepare("
                 INSERT INTO leave_requests (tenant_id, user_id, type, start_date, end_date, total_days, reason, attachment, status, approved_by, approved_at, created_at, updated_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([$tenant_id, $user_id, $type, $start_date, $end_date, $total_days, $reason, $attachment, $status, $approved_by, $approved_at, $current_time, $current_time]);
 
+            // 2. Update Quota jika otomatis approved & jenis cuti
             if ($status === 'approved' && $type === 'cuti') {
                 $year = date('Y', strtotime($start_date));
-                // Update quota dan waktu updated_at pada tabel balances
                 $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
                     ->execute([$total_days, $current_time, $user_id, $year, $tenant_id]);
             }
+
+            // 3. SIMPAN NOTIFIKASI JIKA STATUS PENDING
+            if ($status === 'pending') {
+                $applicant_name = $_SESSION['user_name'] ?? 'Karyawan';
+
+                // Query penerima: Superadmin(1), Admin Tenant(2), HR Tenant(3), & Manager Direct pengaju
+                $recipient_query = "
+                    SELECT DISTINCT id FROM users 
+                    WHERE (
+                        role_id = 1 
+                        OR (tenant_id = ? AND role_id IN (2, 3))
+                        " . (!empty($applicant_manager_id) ? "OR (tenant_id = ? AND id = ?)" : "") . "
+                    )
+                    AND id != ?
+                ";
+
+                $params = [$tenant_id];
+                if (!empty($applicant_manager_id)) {
+                    $params[] = $tenant_id;
+                    $params[] = $applicant_manager_id;
+                }
+                $params[] = $user_id;
+
+                $stmtRecipients = $pdo->prepare($recipient_query);
+                $stmtRecipients->execute($params);
+                $target_user_ids = $stmtRecipients->fetchAll(PDO::FETCH_COLUMN);
+
+                if (!empty($target_user_ids)) {
+                    $notif_title = "Pengajuan " . ucfirst($type) . " Baru";
+                    $notif_msg = "{$applicant_name} mengajukan {$type}.";
+                    $notif_url = "approval_leave";
+                    $notif_icon = "calendar-check";
+
+                    $stmtNotifInsert = $pdo->prepare("INSERT INTO notifications (tenant_id, user_id, title, message, url, icon) VALUES (?, ?, ?, ?, ?, ?)");
+                    foreach ($target_user_ids as $target_uid) {
+                        $stmtNotifInsert->execute([$tenant_id, $target_uid, $notif_title, $notif_msg, $notif_url, $notif_icon]);
+                    }
+                }
+            }
+
+            $pdo->commit();
 
             $type_label = ucfirst($type);
             $msg = "Pengajuan {$type_label} berhasil dibuat.";
@@ -185,6 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             exit;
 
         } catch (Exception $e) {
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
             exit;
         }
@@ -345,7 +395,7 @@ require_once __DIR__ . '/components/sidebar.php';
                         </div>
                     </div>
 
-                    <!-- TOMBOL TETAP STATIC -->
+                    <!-- TOMBOL SUBMIT -->
                     <div class="mt-8 pt-6 mb-12 md:mb-2 border-t border-gray-100 flex gap-3">
                         <a href="<?= $base_url ?? '' ?>/leave" id="btnCancel" class="w-1/3 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition flex items-center justify-center">
                             Batal
@@ -399,7 +449,6 @@ require_once __DIR__ . '/components/sidebar.php';
         });
     });
 
-    // SINKRONISASI OTOMATIS: SAAT TANGGAL MULAI BERUBAH, TANGGAL SELESAI IKUT BERUBAH
     function syncEndDate() {
         document.getElementById('end_day').value = document.getElementById('start_day').value;
         document.getElementById('end_month').value = document.getElementById('start_month').value;
@@ -461,7 +510,6 @@ require_once __DIR__ . '/components/sidebar.php';
     
     calculateDays();
 
-    // DINAMISASI HANYA PADA KARTU QUOTA DAN STATUS LAMPIRAN (TEKS TOMBOL STATIC)
     document.getElementById('typeSelect').addEventListener('change', function() {
         const type = this.value; 
         const quotaCard = document.getElementById('quotaCard');
@@ -482,7 +530,6 @@ require_once __DIR__ . '/components/sidebar.php';
 
     document.getElementById('typeSelect').dispatchEvent(new Event('change'));
 
-    // MODAL KONFIRMASI OVER QUOTA
     function openQuotaModal(reqDays) {
         document.getElementById('modalReqDays').innerText = reqDays;
         document.getElementById('modalUserQuota').innerText = userSisaCuti;
@@ -504,7 +551,6 @@ require_once __DIR__ . '/components/sidebar.php';
         setTimeout(() => { document.getElementById('confirmQuotaModal').classList.add('hidden'); }, 300);
     }
 
-    // FORM SUBMIT HANDLING
     $('#leaveForm').on('submit', function(e) {
         e.preventDefault();
 
@@ -517,7 +563,6 @@ require_once __DIR__ . '/components/sidebar.php';
             return false;
         }
 
-        // Cek jika cuti melebihi sisa cuti -> Tampilkan modal konfirmasi
         if (type === 'cuti' && totalDays > userSisaCuti) {
             openQuotaModal(totalDays);
             return false;
@@ -532,7 +577,6 @@ require_once __DIR__ . '/components/sidebar.php';
     }
 
     function executeSubmitLeave() {
-        // Tampilkan Overlay Loading
         document.getElementById('loadingOverlay').classList.remove('hidden');
 
         const formData = new FormData(document.getElementById('leaveForm'));

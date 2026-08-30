@@ -14,6 +14,14 @@ date_default_timezone_set($tz_setting);
 
 $current_time = date('Y-m-d H:i:s');
 
+// Helper Notification Function
+if (!function_exists('notifyUser')) {
+    function notifyUser($pdo, $tenant_id, $target_user_id, $title, $message, $url, $icon = 'bell') {
+        $sql = "INSERT INTO notifications (tenant_id, user_id, title, message, url, icon) VALUES (?, ?, ?, ?, ?, ?)";
+        $pdo->prepare($sql)->execute([$tenant_id, $target_user_id, $title, $message, $url, $icon]);
+    }
+}
+
 // ==============================================================================
 // LOGIKA HAK AKSES (GUARD HALAMAN APPROVAL)
 // ==============================================================================
@@ -99,8 +107,43 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
+                // Ambil data pengaju reimburse
+                $stmtInfo = $pdo->prepare("SELECT user_id FROM reimbursement_requests WHERE id = ? AND tenant_id = ?");
+                $stmtInfo->execute([$id, $tenant_id]);
+                $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+
+                if (!$info) {
+                    throw new Exception("Data pengajuan klaim tidak ditemukan.");
+                }
+
                 $pdo->prepare("UPDATE reimbursement_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
                     ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
+
+                // SIMPAN NOTIFIKASI BALASAN KE USER PENGAJU
+                $approver_name = $_SESSION['user_name'] ?? 'Atasan/HR';
+                $requester_id = $info['user_id'];
+
+                if ($action === 'approve') {
+                    notifyUser(
+                        $pdo,
+                        $tenant_id,
+                        $requester_id,
+                        "Pengajuan Reimburse Disetujui",
+                        "Pengajuan reimburse anda sudah disetujui.",
+                        "reimbursement",
+                        "check-circle"
+                    );
+                } else {
+                    notifyUser(
+                        $pdo,
+                        $tenant_id,
+                        $requester_id,
+                        "Pengajuan Reimburse Ditolak",
+                        "Mohon maaf pengajuan reimburse anda ditolak oleh {$approver_name}",
+                        "reimbursement",
+                        "x-circle"
+                    );
+                }
 
                 $_SESSION['toast_msg'] = "Pengajuan reimburse berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
                 $_SESSION['toast_type'] = "success";
@@ -200,7 +243,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             $avatar = !empty($rm['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($rm['avatar']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($safe_name);
                                             
                                             $date_str = date('d M Y', strtotime($rm['date']));
-                                            $category = htmlspecialchars($rm['category'] ?? 'Lainnya');
+                                            $category = htmlspecialchars($rm['type'] ?? 'Lainnya');
                                             $amount_str = "Rp " . number_format($rm['amount'], 0, ',', '.');
 
                                             $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu';
@@ -348,7 +391,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
                     };
 
-                    const attUrl = data.attachment ? `${baseUrl}/assets/img/reimbursements/${data.attachment}` : null;
+                    const attUrl = data.attachment ? `${baseUrl}/assets/img/reimbursement_requests/${data.attachment}` : null;
                     let attachmentHtml = attUrl 
                         ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Bukti Nota</a>` 
                         : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran nota</p>';
@@ -377,7 +420,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                 </div>
                                 <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
                                     <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Kategori</p>
-                                    <p class="text-xs font-bold text-gray-800 mt-1 capitalize">${data.category}</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1 capitalize">${data.type}</p>
                                 </div>
                             </div>
                             

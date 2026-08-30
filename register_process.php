@@ -3,6 +3,10 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
+// SET TIMEZONE JAKARTA
+date_default_timezone_set('Asia/Jakarta');
+$current_time = date('Y-m-d H:i:s');
+
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -21,7 +25,7 @@ if (empty($company_name) || empty($admin_name) || empty($email) || empty($passwo
 }
 
 try {
-    // Cek duplikasi email
+    // 1. Cek duplikasi email
     $stmtCheck = $pdo->prepare("SELECT id FROM users WHERE email = ?");
     $stmtCheck->execute([$email]);
     if ($stmtCheck->fetch()) {
@@ -31,24 +35,43 @@ try {
 
     $pdo->beginTransaction();
 
-    $stmtTenant = $pdo->prepare("INSERT INTO tenants (name) VALUES (?) RETURNING id");
-    $stmtTenant->execute([$company_name]);
-    $tenant_id = $stmtTenant->fetchColumn();
+    // 2. Insert Tenant Baru (Perusahaan) dengan status 'pending' & timezone Jakarta
+    $stmtTenant = $pdo->prepare("INSERT INTO tenants (name, email, status, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)");
+    $stmtTenant->execute([$company_name, $email, $current_time, $current_time]);
+    $tenant_id = $pdo->lastInsertId();
 
+    // 3. Insert Admin User Baru (role_id = 2 untuk Company Admin)
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-    $stmtUser = $pdo->prepare("INSERT INTO users (tenant_id, role, name, email, password) VALUES (?, 'admin', ?, ?, ?)");
-    $stmtUser->execute([$tenant_id, $admin_name, $email, $hashed_password]);
+    $stmtUser = $pdo->prepare("INSERT INTO users (tenant_id, role_id, name, email, password, created_at) VALUES (?, 2, ?, ?, ?, ?)");
+    $stmtUser->execute([$tenant_id, $admin_name, $email, $hashed_password, $current_time]);
+    $user_id = $pdo->lastInsertId();
+
+    // 4. Insert Default Tenant Settings
+    $stmtSettings = $pdo->prepare("INSERT INTO tenant_settings (tenant_id, attendance_method, timezone, created_at, updated_at) VALUES (?, 'geo_face', 'Asia/Jakarta', ?, ?)");
+    $stmtSettings->execute([$tenant_id, $current_time, $current_time]);
 
     $pdo->commit();
 
-    // Set toast untuk halaman login
-    $_SESSION['toast_msg'] = "Perusahaan berhasil didaftarkan! Silakan masuk.";
-    $_SESSION['toast_type'] = "success";
+    // Simpan data session untuk alur pemilihan paket SaaS
+    $_SESSION['pending_tenant_id'] = $tenant_id;
+    $_SESSION['pending_company_name'] = $company_name;
+    $_SESSION['pending_admin_name'] = $admin_name;
+    $_SESSION['pending_email'] = $email;
 
-    echo json_encode(['status' => 'success', 'message' => 'Pendaftaran berhasil! Mengalihkan...']);
-} catch (Exception $e) {
-    if ($pdo->inTransaction()) {
+    echo json_encode([
+        'status' => 'success', 
+        'message' => 'Pendaftaran berhasil! Mengalihkan ke pemilihan paket...',
+        'redirect' => 'pending_tenant'
+    ]);
+    exit;
+
+} catch (Throwable $e) {
+    if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    echo json_encode(['status' => 'error', 'message' => 'Kesalahan sistem: ' . $e->getMessage()]);
+    echo json_encode([
+        'status' => 'error', 
+        'message' => 'Kesalahan sistem: ' . $e->getMessage()
+    ]);
+    exit;
 }

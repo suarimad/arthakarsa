@@ -15,6 +15,14 @@ date_default_timezone_set($tz_setting);
 // Generate waktu DATETIME saat ini berdasarkan timezone tenant
 $current_time = date('Y-m-d H:i:s');
 
+// Helper Notification Function
+if (!function_exists('notifyUser')) {
+    function notifyUser($pdo, $tenant_id, $target_user_id, $title, $message, $url, $icon = 'bell') {
+        $sql = "INSERT INTO notifications (tenant_id, user_id, title, message, url, icon) VALUES (?, ?, ?, ?, ?, ?)";
+        $pdo->prepare($sql)->execute([$tenant_id, $target_user_id, $title, $message, $url, $icon]);
+    }
+}
+
 // ==============================================================================
 // LOGIKA HAK AKSES (GUARD HALAMAN APPROVAL)
 // ==============================================================================
@@ -100,8 +108,43 @@ if (isset($_REQUEST['ajax_action'])) {
                 $status = ($action === 'approve') ? 'approved' : 'rejected';
                 $note = $_POST['note'] ?? null;
 
+                // Ambil data pengaju lembur
+                $stmtInfo = $pdo->prepare("SELECT user_id FROM overtime_requests WHERE id = ? AND tenant_id = ?");
+                $stmtInfo->execute([$id, $tenant_id]);
+                $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+
+                if (!$info) {
+                    throw new Exception("Data pengajuan lembur tidak ditemukan.");
+                }
+
                 $pdo->prepare("UPDATE overtime_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
                     ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
+
+                // SIMPAN NOTIFIKASI BALASAN KE USER PENGAJU
+                $approver_name = $_SESSION['user_name'] ?? 'Atasan/HR';
+                $requester_id = $info['user_id'];
+
+                if ($action === 'approve') {
+                    notifyUser(
+                        $pdo,
+                        $tenant_id,
+                        $requester_id,
+                        "Pengajuan Lembur Disetujui",
+                        "Pengajuan lembur anda sudah disetujui.",
+                        "overtime",
+                        "check-circle"
+                    );
+                } else {
+                    notifyUser(
+                        $pdo,
+                        $tenant_id,
+                        $requester_id,
+                        "Pengajuan Lembur Ditolak",
+                        "Mohon maaf pengajuan lembur anda ditolak oleh {$approver_name}",
+                        "overtime",
+                        "x-circle"
+                    );
+                }
 
                 $_SESSION['toast_msg'] = "Pengajuan lembur berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
                 $_SESSION['toast_type'] = "success";

@@ -18,7 +18,6 @@ $current_time = date('Y-m-d H:i:s');
 $role_id = $_SESSION['role_id'] ?? null;
 $role_name_session = strtolower($_SESSION['role'] ?? '');
 
-// Logika Status & Tombol (Karyawan vs Atasan)
 $is_employee = ($role_id == 5 || $role_name_session === 'employee');
 
 // ==============================================================================
@@ -33,13 +32,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     $duration_minutes = (int)($_POST['duration_minutes'] ?? 0);
     $reason = trim($_POST['reason'] ?? '');
     
-    $status = $is_employee ? 'pending' : 'approved';
-    $approved_by = null;
-    $approved_at = null;
-    
-    if ($status === 'approved') {
+    // Cari Manager Direct dari User
+    $stmtMgr = $pdo->prepare("SELECT manager_id FROM users WHERE id = ? LIMIT 1");
+    $stmtMgr->execute([$user_id]);
+    $applicant_manager_id = $stmtMgr->fetchColumn();
+
+    // LOGIKA PENENTUAN STATUS (Auto approved HANYA jika BUKAN Employee DAN TIDAK MEMILIKI manager_id)
+    if (!$is_employee && empty($applicant_manager_id)) {
+        $status = 'approved';
         $approved_by = $user_id;
         $approved_at = $current_time;
+    } else {
+        $status = 'pending';
+        $approved_by = null;
+        $approved_at = null;
     }
 
     $today = date('Y-m-d');
@@ -64,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
         try {
             $attachment = null;
             if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                // Cek ukuran maks 10MB
                 if ($_FILES['attachment']['size'] > 10 * 1024 * 1024) {
                     throw new Exception("Ukuran file maksimal 10MB!");
                 }
@@ -82,7 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                 }
 
                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                    // Kompres & Ubah Format ke .PNG (Maks 200KB)
                     $attachment = 'ot_' . $user_id . '_' . time() . '.png';
                     $targetPath = $upload_dir . $attachment;
                     
@@ -118,11 +122,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                             $srcImage = $resized;
                         }
 
-                        // Simpan awal sebagai PNG dengan kompresi maksimal
                         imagepng($srcImage, $targetPath, 9);
                         imagedestroy($srcImage);
 
-                        // Iterasi kompresi ulang dimensi jika file size > 200KB
                         while (filesize($targetPath) > 200 * 1024) {
                             $srcImg2 = imagecreatefrompng($targetPath);
                             if (!$srcImg2) break;
@@ -140,18 +142,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
                     } else {
                         move_uploaded_file($_FILES['attachment']['tmp_name'], $targetPath);
                     }
-                } else { // File PDF
+                } else {
                     $attachment = 'ot_' . $user_id . '_' . time() . '.pdf';
                     move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . $attachment);
                 }
             }
 
-            // Insert Data ke overtime_requests dengan Datetime eksplisit
+            $pdo->beginTransaction();
+
+            // 1. Insert Data ke overtime_requests
             $stmt = $pdo->prepare("
                 INSERT INTO overtime_requests (tenant_id, user_id, date, start_time, end_time, duration_minutes, reason, attachment, status, approved_by, approved_at, created_at, updated_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([$tenant_id, $user_id, $ot_date, $start_time, $end_time, $duration_minutes, $reason, $attachment, $status, $approved_by, $approved_at, $current_time, $current_time]);
+
+            // 2. SIMPAN NOTIFIKASI JIKA STATUS PENDING
+            if ($status === 'pending') {
+                $applicant_name = $_SESSION['user_name'] ?? 'Karyawan';
+                
+                // Kalkulasi total_hour dari duration_minutes
+                $dur_hours = floor($duration_minutes / 60);
+                $dur_mins = $duration_minutes % 60;
+                $total_hour = ($dur_hours > 0 ? "{$dur_hours} Jam " : "") . ($dur_mins > 0 ? "{$dur_mins} Menit" : "");
+                $total_hour = trim($total_hour);
+                if (empty($total_hour)) {
+                    $total_hour = "0 Menit";
+                }
+
+                // Query penerima: Superadmin(1), Admin Tenant(2), HR Tenant(3), & Manager Direct pengaju
+                $recipient_query = "
+                    SELECT DISTINCT id FROM users 
+                    WHERE (
+                        role_id = 1 
+                        OR (tenant_id = ? AND role_id IN (2, 3))
+                        " . (!empty($applicant_manager_id) ? "OR (tenant_id = ? AND id = ?)" : "") . "
+                    )
+                    AND id != ?
+                ";
+
+                $params = [$tenant_id];
+                if (!empty($applicant_manager_id)) {
+                    $params[] = $tenant_id;
+                    $params[] = $applicant_manager_id;
+                }
+                $params[] = $user_id;
+
+                $stmtRecipients = $pdo->prepare($recipient_query);
+                $stmtRecipients->execute($params);
+                $target_user_ids = $stmtRecipients->fetchAll(PDO::FETCH_COLUMN);
+
+                if (!empty($target_user_ids)) {
+                    $notif_title = "Pengajuan Lembur Baru";
+                    $notif_msg = "{$applicant_name} mengajukan lembur selama {$total_hour}.";
+                    $notif_url = "approval_overtime";
+                    $notif_icon = "clock";
+
+                    $stmtNotifInsert = $pdo->prepare("INSERT INTO notifications (tenant_id, user_id, title, message, url, icon) VALUES (?, ?, ?, ?, ?, ?)");
+                    foreach ($target_user_ids as $target_uid) {
+                        $stmtNotifInsert->execute([$tenant_id, $target_uid, $notif_title, $notif_msg, $notif_url, $notif_icon]);
+                    }
+                }
+            }
+
+            $pdo->commit();
 
             $msg = "Berhasil mengajukan lembur" . ($status === 'approved' ? " (Otomatis disetujui)." : ".");
             
@@ -162,6 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
             exit;
 
         } catch (Exception $e) {
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
             exit;
         }

@@ -142,7 +142,7 @@ require_once __DIR__ . '/components/sidebar.php';
             </div>
 
             <!-- Form Card (Disamakan layout-nya dengan change_password.php) -->
-            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm space-y-6">
+            <div class="bg-surface md:border border-gray-100 md:rounded-3xl md:shadow-sm p-6 space-y-6">
                 
                 <!-- UPLOAD AVATAR SECTION -->
                 <div class="flex flex-col items-center justify-center text-center pb-6 border-b border-gray-100">

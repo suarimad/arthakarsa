@@ -362,9 +362,16 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                     else if (st === 'canceled') statusBadge = '<span class="px-2.5 py-1 bg-gray-100 text-gray-500 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibatalkan</span>';
 
                     let rejectNoteHtml = data.rejection_note ? `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Alasan Penolakan:</p><p class="text-xs font-medium text-gray-700">${data.rejection_note}</p></div>` : '';
-                    let approverHtml = data.approver_name ? `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>` : '';
-
-                    if(data.status === 'rejected') approverHtml = '';
+                    
+                    // TAMPILKAN NAMA USER YANG MELAKUKAN APPROVE ATAU REJECT
+                    let approverHtml = '';
+                    if (data.approver_name) {
+                        if (st === 'approved') {
+                            approverHtml = `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>`;
+                        } else if (st === 'rejected') {
+                            approverHtml = `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Ditolak Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>`;
+                        }
+                    }
 
                     crudContent.innerHTML = `
                         <div class="text-center mb-6 mt-2 md:mt-0">
