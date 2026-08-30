@@ -52,7 +52,7 @@ if (isset($_REQUEST['ajax_action'])) {
                 exit;
             }
 
-            // Hapus Tenant (Karena constraint FK ON DELETE CASCADE, pengaturan & user terkait idealnya ikut terhapus)
+            // Hapus Tenant
             $pdo->prepare("DELETE FROM tenants WHERE id = ?")->execute([$id]);
             
             $_SESSION['toast_msg'] = "Data Tenant berhasil dihapus dari sistem.";
@@ -153,7 +153,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             <div class="flex justify-between items-center px-1">
                 <div>
                     <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Database Tenant</h2>
-                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola data perusahaan (Tenant) dan konfigurasi sistem (Superadmin Only).</p>
+                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola data perusahaan (Tenant) dan konfigurasi sistem.</p>
                 </div>
                 <div class="flex gap-2">
                     <button onclick="openFormModal('add')" class="bg-primary/10 text-primary px-3 md:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
@@ -193,7 +193,10 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                     </thead>
                                     <tbody>
                                         <?php foreach($tenants as $t): 
-                                            $logo_url = !empty($t['logo']) ? ($base_url ?? '') . '/assets/img/tenants/' . htmlspecialchars($t['logo']) : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($t['name']);
+                                            // LOGIKA MENGAMBIL LOGO DARI TABEL TENANTS (PATH: assets/img/tenants/)
+                                            $logo_url = !empty($t['logo']) 
+                                                ? ($base_url ?? '') . '/assets/img/tenants/' . htmlspecialchars($t['logo']) 
+                                                : "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=" . urlencode($t['name']);
                                         ?>
                                             <tr class="hover:bg-gray-50/50 transition-colors group">
                                                 <td class="text-center">
@@ -202,6 +205,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                 <td>
                                                     <div class="flex items-center gap-3">
                                                         <div class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden">
+                                                            <!-- MENAMPILKAN LOGO / INISIAL -->
                                                             <img src="<?= $logo_url ?>" alt="Logo" class="w-full h-full object-cover">
                                                         </div>
                                                         <span class="text-xs font-bold text-gray-800"><?= htmlspecialchars($t['name']) ?></span>
@@ -400,7 +404,6 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         document.getElementById('tabBtn-' + tabName).className = "pb-3 border-b-2 font-bold text-sm transition-colors border-primary text-primary";
         document.getElementById('tabContent-' + tabName).classList.remove('hidden');
         
-        // Refresh tabel layout saat dipindahkan ke status tidak tersembunyi
         if(tabName === 'tenants' && tableTenants) tableTenants.columns.adjust().draw(false);
         if(tabName === 'settings' && tableSettings) tableSettings.columns.adjust().draw(false);
     }
