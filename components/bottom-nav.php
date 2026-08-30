@@ -194,6 +194,41 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                     </div>
                 </div>
 
+                <!-- ================= APPROVAL MENU ================= -->
+                <?php if (in_array($bn_role_name, ['superadmin', 'admin', 'hr', 'manager', 'finance'])): ?>
+                <div>
+                    <h4 class="text-[11px] md:text-xs font-semibold text-gray-500 mb-4 uppercase tracking-wider px-1">Approval Menu</h4>
+                    <div class="grid grid-cols-4 md:grid-cols-6 gap-y-7 gap-x-2 md:gap-x-6">
+                        
+                        <?php if (in_array($bn_role_name, ['superadmin', 'admin', 'hr', 'manager'])): ?>
+                        <a href="<?= $base_url ?? '' ?>/approval_leave" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="calendar-check" class="w-6 h-6 md:w-7 md:h-7"></i>
+                            </div>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-violet-600 transition-colors">Approve<br>Izin</span>
+                        </a>
+
+                        <a href="<?= $base_url ?? '' ?>/approval_overtime" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="clock" class="w-6 h-6 md:w-7 md:h-7"></i>
+                            </div>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-orange-600 transition-colors">Approve<br>Lembur</span>
+                        </a>
+                        <?php endif; ?>
+
+                        <?php if (in_array($bn_role_name, ['superadmin', 'admin', 'hr', 'manager', 'finance'])): ?>
+                        <a href="<?= $base_url ?? '' ?>/approval_reimbursement" class="flex flex-col items-center gap-1.5 group">
+                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-all shadow-sm group-hover:scale-110">
+                                <i data-lucide="file-check-2" class="w-6 h-6 md:w-7 md:h-7"></i>
+                            </div>
+                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-blue-600 transition-colors">Approve<br>Reimburse</span>
+                        </a>
+                        <?php endif; ?>
+
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- SECTION 2: ADMIN MENU -->
                 <?php if (in_array($bn_role_name, ['admin', 'superadmin'])): ?>
                 <div>
@@ -347,13 +382,6 @@ $bn_role_name = strtolower($_SESSION['role'] ?? '');
                                 <i data-lucide="banknote" class="w-6 h-6 md:w-7 md:h-7"></i>
                             </div>
                             <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-teal-600 transition-colors">Daftar<br>Payroll</span>
-                        </a>
-
-                        <a href="<?= $base_url ?? '' ?>/reimbursement" class="flex flex-col items-center gap-1.5 group">
-                            <div class="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-all shadow-sm group-hover:scale-110">
-                                <i data-lucide="receipt" class="w-6 h-6 md:w-7 md:h-7"></i>
-                            </div>
-                            <span class="text-[11px] md:text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-emerald-600 transition-colors">Approval<br>Klaim</span>
                         </a>
 
                     </div>

@@ -12,11 +12,28 @@ $stmtTS->execute([$tenant_id]);
 $tz_setting = $stmtTS->fetchColumn() ?: 'Asia/Jakarta';
 date_default_timezone_set($tz_setting);
 
-// Generate waktu DATETIME saat ini berdasarkan timezone tenant
 $current_time = date('Y-m-d H:i:s');
 
 // ==============================================================================
-// PENANGANAN AJAX (VIEW DETAIL, DELETE/CANCEL)
+// LOGIKA HAK AKSES (GUARD KHUSUS APPROVAL)
+// ==============================================================================
+$role_id = $_SESSION['role_id'] ?? null;
+$role_name_session = strtolower($_SESSION['role'] ?? '');
+
+$allowed_roles = ['superadmin', 'admin', 'hr', 'manager'];
+$allowed_role_ids = [1, 2, 3, 4];
+
+if (!in_array($role_name_session, $allowed_roles) && !in_array($role_id, $allowed_role_ids)) {
+    $_SESSION['toast_msg'] = "Anda tidak memiliki akses ke halaman Approval.";
+    $_SESSION['toast_type'] = "error";
+    header("Location: " . ($base_url ?? '') . "/leave");
+    exit;
+}
+
+$can_delete_all = in_array($role_name_session, ['admin', 'superadmin', 'hr']);
+
+// ==============================================================================
+// PENANGANAN AJAX (VIEW DETAIL, APPROVE, REJECT, DELETE)
 // ==============================================================================
 if (isset($_REQUEST['ajax_action'])) {
     header('Content-Type: application/json');
@@ -24,7 +41,7 @@ if (isset($_REQUEST['ajax_action'])) {
     try {
         $action = $_REQUEST['ajax_action'];
 
-        // AJAX 1: VIEW DETAIL PRIBADI
+        // AJAX 1: VIEW DETAIL
         if ($action === 'view') {
             $id = $_REQUEST['id'];
             
@@ -37,47 +54,81 @@ if (isset($_REQUEST['ajax_action'])) {
                 LEFT JOIN departments d ON p.department_id = d.id
                 LEFT JOIN users a ON lr.approved_by = a.id
                 LEFT JOIN leave_balances lb ON lr.user_id = lb.user_id AND lb.year = YEAR(lr.start_date)
-                WHERE lr.id = ? AND lr.tenant_id = ? AND lr.user_id = ?
+                WHERE lr.id = ? AND lr.tenant_id = ?
             ";
             
             $stmt = $pdo->prepare($query);
-            $stmt->execute([$id, $tenant_id, $user_id]);
+            $stmt->execute([$id, $tenant_id]);
             $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($data) {
                 echo json_encode(['status' => 'success', 'data' => $data]);
             } else {
-                echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan atau akses ditolak.']);
-            }
-            exit;
-        }
-
-        // AJAX 2: DELETE / BATALKAN PENGAJUAN (Hanya yang masih pending)
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'delete') {
-            $id = $_POST['id'];
-
-            $stmt = $pdo->prepare("SELECT user_id, status FROM leave_requests WHERE id = ? AND tenant_id = ? AND user_id = ?");
-            $stmt->execute([$id, $tenant_id, $user_id]);
-            $req = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($req) {
-                if ($req['status'] === 'pending') {
-                    // Soft Delete Data Pengajuan
-                    $pdo->prepare("UPDATE leave_requests SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
-                        ->execute([$current_time, $current_time, $id, $tenant_id]);
-
-                    $_SESSION['toast_msg'] = "Pengajuan berhasil dibatalkan/dihapus.";
-                    $_SESSION['toast_type'] = "success";
-                    echo json_encode(['status' => 'success']);
-                } else {
-                    echo json_encode(['status' => 'error', 'message' => 'Hanya pengajuan dengan status Menunggu yang dapat dibatalkan.']);
-                }
-            } else {
                 echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan.']);
             }
             exit;
         }
+
+        // AJAX 2: APPROVE / REJECT / DELETE (POST)
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $id = $_POST['id'];
+
+            // PROSES DELETE (HANYA UNTUK SUPERADMIN/HR)
+            if ($action === 'delete') {
+                $stmt = $pdo->prepare("SELECT user_id, status FROM leave_requests WHERE id = ? AND tenant_id = ?");
+                $stmt->execute([$id, $tenant_id]);
+                $req = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($req) {
+                    if ($can_delete_all) {
+                        $pdo->prepare("UPDATE leave_requests SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
+                            ->execute([$current_time, $current_time, $id, $tenant_id]);
+
+                        $_SESSION['toast_msg'] = "Data berhasil dihapus dari sistem.";
+                        $_SESSION['toast_type'] = "success";
+                        echo json_encode(['status' => 'success']);
+                    } else {
+                        echo json_encode(['status' => 'error', 'message' => 'Anda tidak memiliki hak untuk menghapus data ini.']);
+                    }
+                } else {
+                    echo json_encode(['status' => 'error', 'message' => 'Data tidak ditemukan.']);
+                }
+                exit;
+            }
+
+            // PROSES APPROVE / REJECT
+            if (in_array($action, ['approve', 'reject'])) {
+                $status = ($action === 'approve') ? 'approved' : 'rejected';
+                $note = $_POST['note'] ?? null;
+
+                $pdo->beginTransaction();
+
+                $pdo->prepare("UPDATE leave_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_note = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
+                    ->execute([$status, $user_id, $current_time, $note, $current_time, $id, $tenant_id]);
+
+                // Update Saldo Cuti jika di-approve
+                if ($action === 'approve') {
+                    $stmtInfo = $pdo->prepare("SELECT user_id, type, total_days, start_date FROM leave_requests WHERE id = ? AND tenant_id = ?");
+                    $stmtInfo->execute([$id, $tenant_id]);
+                    $info = $stmtInfo->fetch();
+                    
+                    if ($info && strtolower($info['type']) === 'cuti') {
+                        $year = date('Y', strtotime($info['start_date']));
+                        $pdo->prepare("UPDATE leave_balances SET used_quota = used_quota + ?, updated_at = ? WHERE user_id = ? AND year = ? AND tenant_id = ?")
+                            ->execute([(int)$info['total_days'], $current_time, $info['user_id'], $year, $tenant_id]);
+                    }
+                }
+
+                $pdo->commit();
+
+                $_SESSION['toast_msg'] = "Pengajuan berhasil di" . ($action === 'approve' ? 'setujui' : 'tolak') . ".";
+                $_SESSION['toast_type'] = "success";
+                echo json_encode(['status' => 'success']);
+                exit;
+            }
+        }
     } catch (Exception $e) {
+        if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         exit;
     }
@@ -88,7 +139,7 @@ $user_name = $_SESSION['user_name'] ?? 'User';
 $user_role = $_SESSION['position_name'] ?? $_SESSION['role_display'] ?? ucfirst($_SESSION['role'] ?? 'Employee');
 $tenant_name = $_SESSION['tenant_name'] ?? 'Perusahaan'; 
 
-// MENGAMBIL DATA PENGAJUAN PRIBADI UNTUK DATATABLES
+// MENGAMBIL HANYA DATA STATUS PENDING DARI SEMUA KARYAWAN
 $base_query = "
     SELECT lr.*, u.name as employee_name, u.avatar, d.name as department_name,
            COALESCE(lb.total_quota, 0) as total_quota, COALESCE(lb.used_quota, 0) as used_quota
@@ -97,12 +148,12 @@ $base_query = "
     LEFT JOIN positions p ON u.position_id = p.id
     LEFT JOIN departments d ON p.department_id = d.id
     LEFT JOIN leave_balances lb ON lr.user_id = lb.user_id AND lb.year = YEAR(lr.start_date)
-    WHERE lr.tenant_id = ? AND lr.user_id = ? AND lr.deleted_at IS NULL 
+    WHERE lr.tenant_id = ? AND lr.deleted_at IS NULL AND lr.status = 'pending'
     ORDER BY lr.created_at DESC
 ";
 
 $stmt = $pdo->prepare($base_query);
-$stmt->execute([$tenant_id, $user_id]);
+$stmt->execute([$tenant_id]);
 $leave_requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/components/head.php';
@@ -140,17 +191,14 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             
             <div class="flex justify-between items-center px-1">
                 <div>
-                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Riwayat Izin & Cuti Saya</h2>
-                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Kelola riwayat pengajuan pribadi Anda.</p>
+                    <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Approval Izin & Cuti</h2>
+                    <p class="text-[11px] md:text-xs text-gray-500 mt-0.5">Daftar pengajuan izin, cuti, dan sakit yang menunggu persetujuan.</p>
                 </div>
-                <a href="leave_add" class="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:bg-primary hover:text-surface transition shadow-sm active:scale-95">
-                    <i data-lucide="plus" class="w-4 h-4"></i> <span class="hidden md:inline">Ajukan Izin</span>
-                </a>
             </div>
 
             <div class="relative z-0">
                 <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                <input type="text" id="dtSearchInput" placeholder="Cari jenis atau status pengajuan..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
+                <input type="text" id="dtSearchInput" placeholder="Cari nama karyawan atau jenis..." class="w-full pl-11 pr-4 py-3 bg-surface md:bg-white border border-gray-200 md:border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition shadow-sm">
             </div>
 
             <div class="md:grid md:grid-cols-3 md:gap-6">
@@ -179,18 +227,15 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                             $end = date('d M Y', strtotime($lr['end_date']));
                                             $date_range = ($start === $end) ? $start : "$start - $end";
                                             
+                                            $sisa_cuti = $lr['total_quota'] - $lr['used_quota'];
+                                            
                                             $type = strtolower($lr['type']);
                                             $type_icon = 'file-text'; $type_color = 'text-gray-600';
                                             if ($type === 'cuti') { $type_icon = 'calendar-off'; $type_color = 'text-primary'; }
                                             if ($type === 'izin') { $type_icon = 'user-minus'; $type_color = 'text-blue-500'; }
                                             if ($type === 'sakit') { $type_icon = 'stethoscope'; $type_color = 'text-pending'; }
 
-                                            $status = strtolower($lr['status']);
-                                            $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Unknown';
-                                            if ($status === 'pending') { $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu'; }
-                                            if ($status === 'approved') { $badge_bg = 'bg-success/10'; $badge_text = 'text-success'; $badge_label = 'Disetujui'; }
-                                            if ($status === 'rejected') { $badge_bg = 'bg-failed/10'; $badge_text = 'text-failed'; $badge_label = 'Ditolak'; }
-                                            if ($status === 'canceled') { $badge_bg = 'bg-gray-100'; $badge_text = 'text-gray-500'; $badge_label = 'Dibatalkan'; }
+                                            $badge_bg = 'bg-pending/10'; $badge_text = 'text-pending'; $badge_label = 'Menunggu';
                                         ?>
                                             <tr class="hover:bg-gray-50/50 transition-colors group">
                                                 <td>
@@ -226,8 +271,16 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                                             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                                         </button>
                                                         
-                                                        <?php if ($status === 'pending'): ?>
-                                                            <button onclick="deleteLeave(<?= $lr['id'] ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Batalkan Pengajuan">
+                                                        <button onclick="openConfirmModal(<?= $lr['id'] ?>, 'approve', '<?= $type ?>', <?= $lr['total_days'] ?>, <?= $sisa_cuti ?>)" class="p-2 bg-success/10 text-success rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-success hover:text-white transition shadow-sm active:scale-95" title="Setujui">
+                                                            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                        
+                                                        <button onclick="openConfirmModal(<?= $lr['id'] ?>, 'reject', '<?= $type ?>', <?= $lr['total_days'] ?>, <?= $sisa_cuti ?>)" class="p-2 bg-failed/10 text-failed rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Tolak">
+                                                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                                        </button>
+
+                                                        <?php if ($can_delete_all): ?>
+                                                            <button onclick="deleteLeave(<?= $lr['id'] ?>)" class="p-2 bg-gray-100 text-gray-400 rounded-xl text-xs font-semibold flex items-center justify-center hover:bg-failed hover:text-white transition shadow-sm active:scale-95" title="Hapus Permanen">
                                                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                                             </button>
                                                         <?php endif; ?>
@@ -267,7 +320,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     </div>
 </div>
 
-<!-- ================= MODAL KONFIRMASI DELETE ================= -->
+<!-- ================= MODAL KONFIRMASI APPROVE/REJECT/DELETE ================= -->
 <div id="confirmModal" class="fixed inset-0 hidden" style="z-index: 99999;">
     <div id="confirmOverlay" onclick="closeConfirm()" class="absolute inset-0 bg-gray-900/40 opacity-0 transition-opacity duration-300 backdrop-blur-sm cursor-pointer"></div>
     
@@ -295,7 +348,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
             "pageLength": 10,
             "ordering": false,
             "language": {
-                "emptyTable": "Belum ada riwayat pengajuan",
+                "emptyTable": "Belum ada pengajuan baru.",
                 "info": "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
                 "infoEmpty": "Menampilkan 0 s/d 0 dari 0 data",
                 "paginate": {
@@ -323,7 +376,12 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     document.body.appendChild(crudModal);
 
     window.openViewModal = function(id) {
-        crudContent.innerHTML = `<div class="flex justify-center py-10"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i></div>`;
+        crudContent.innerHTML = `
+            <div class="flex justify-center py-10">
+                <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary"></i>
+            </div>
+        `;
+        
         crudModal.classList.remove('hidden');
         lucide.createIcons();
         
@@ -354,22 +412,43 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                         ? `<a href="${attUrl}" target="_blank" class="text-xs font-bold text-primary hover:underline flex items-center justify-center gap-1.5 mt-3 py-2 bg-primary/10 rounded-lg"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Lihat Lampiran</a>` 
                         : '<p class="text-[10px] text-gray-400 mt-2 italic flex items-center gap-1"><i data-lucide="file-x-2" class="w-3 h-3"></i> Tidak ada lampiran file</p>';
 
-                    let statusBadge = '';
-                    const st = (data.status || '').toLowerCase();
-                    if (st === 'pending') statusBadge = '<span class="px-2.5 py-1 bg-pending/10 text-pending font-bold text-[10px] rounded-md uppercase tracking-wider">Menunggu</span>';
-                    else if (st === 'approved') statusBadge = '<span class="px-2.5 py-1 bg-success/10 text-success font-bold text-[10px] rounded-md uppercase tracking-wider">Disetujui</span>';
-                    else if (st === 'rejected') statusBadge = '<span class="px-2.5 py-1 bg-failed/10 text-failed font-bold text-[10px] rounded-md uppercase tracking-wider">Ditolak</span>';
-                    else if (st === 'canceled') statusBadge = '<span class="px-2.5 py-1 bg-gray-100 text-gray-500 font-bold text-[10px] rounded-md uppercase tracking-wider">Dibatalkan</span>';
+                    const remainingQuota = data.total_quota - data.used_quota;
 
-                    let rejectNoteHtml = data.rejection_note ? `<div class="mt-4 p-3 border border-failed/20 bg-failed/5 rounded-xl"><p class="text-[10px] font-bold text-failed mb-1 uppercase tracking-wider">Alasan Penolakan:</p><p class="text-xs font-medium text-gray-700">${data.rejection_note}</p></div>` : '';
-                    let approverHtml = data.approver_name ? `<div class="mt-4 p-3 border border-success/20 bg-success/5 rounded-xl"><p class="text-[10px] font-bold text-success mb-1 uppercase tracking-wider">Disetujui Oleh:</p><p class="text-xs font-bold text-gray-800">${data.approver_name}</p></div>` : '';
+                    let actionButtons = `
+                        <div class="flex gap-3 mt-6 border-t border-gray-100 pt-6">
+                            <button onclick="openConfirmModal(${data.id}, 'reject', '${data.type}', ${data.total_days}, ${remainingQuota})" class="flex-1 py-3 bg-failed/10 text-failed rounded-xl text-sm font-bold hover:bg-failed hover:text-white transition active:scale-95 shadow-sm">Tolak</button>
+                            <button onclick="openConfirmModal(${data.id}, 'approve', '${data.type}', ${data.total_days}, ${remainingQuota})" class="flex-1 py-3 bg-success/10 text-success rounded-xl text-sm font-bold hover:bg-success hover:text-white transition active:scale-95 shadow-sm">Setujui</button>
+                        </div>
+                    `;
 
-                    if(data.status === 'rejected') approverHtml = '';
+                    let quotaHtml = `
+                        <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center col-span-2">
+                            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Hari</p>
+                            <p class="text-xs font-bold text-primary mt-1">${data.total_days} Hari Kerja</p>
+                        </div>
+                    `;
+                    
+                    if (data.type.toLowerCase() === 'cuti') {
+                        const isExceed = data.total_days > remainingQuota;
+                        const quotaColor = isExceed ? 'text-failed' : 'text-success';
+                        
+                        quotaHtml = `
+                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
+                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pengajuan</p>
+                                <p class="text-xs font-bold text-primary mt-1">${data.total_days} Hari Kerja</p>
+                            </div>
+                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
+                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sisa Cuti</p>
+                                <p class="text-xs font-bold ${quotaColor} mt-1">${remainingQuota} Hari</p>
+                            </div>
+                        `;
+                    }
 
                     crudContent.innerHTML = `
                         <div class="text-center mb-6 mt-2 md:mt-0">
                             <h3 class="text-base md:text-lg font-bold text-gray-800">Detail Pengajuan ${typeLabel}</h3>
-                            <div class="mt-3">${statusBadge}</div>
+                            <p class="text-xs text-primary font-medium mt-0.5">${data.employee_name} <span class="text-gray-400 mx-1">•</span> ${data.department_name || 'Tanpa Departemen'}</p>
+                            <div class="mt-3"><span class="px-2.5 py-1 bg-pending/10 text-pending font-bold text-[10px] rounded-md uppercase tracking-wider">Menunggu</span></div>
                         </div>
                         
                         <div class="space-y-4">
@@ -384,9 +463,8 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                 </div>
                             </div>
                             
-                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-xl shadow-sm text-center">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Hari</p>
-                                <p class="text-xs font-bold text-primary mt-1">${data.total_days} Hari Kerja</p>
+                            <div class="grid grid-cols-2 gap-4">
+                                ${quotaHtml}
                             </div>
                             
                             <div class="bg-gray-50 border border-gray-100 p-4 rounded-xl shadow-sm">
@@ -394,12 +472,11 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                 <p class="text-xs font-medium text-gray-700 leading-relaxed">${data.reason}</p>
                                 ${attachmentHtml}
                             </div>
-                            
-                            ${approverHtml}
-                            ${rejectNoteHtml}
                         </div>
                         
-                        <button onclick="closeCrud()" class="w-full mt-6 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition active:scale-95 shadow-sm">Tutup Detail</button>
+                        ${actionButtons}
+                        
+                        <button onclick="closeCrud()" class="w-full mt-4 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition active:scale-95 shadow-sm">Tutup Detail</button>
                     `;
                     lucide.createIcons();
                 } else {
@@ -424,18 +501,72 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
     const confirmContent = document.getElementById('confirmContent');
     document.body.appendChild(confirmModal);
 
+    window.openConfirmModal = function(id, action, type = '', requestedDays = 0, remainingQuota = 0) {
+        closeCrud();
+        
+        setTimeout(() => {
+            let title = action === 'approve' ? 'Konfirmasi Persetujuan' : 'Konfirmasi Penolakan';
+            let desc = action === 'approve' ? 'Apakah Anda yakin ingin menyetujui pengajuan ini?' : 'Apakah Anda yakin ingin menolak pengajuan ini?';
+            let iconClass = action === 'approve' ? 'bg-success/10 text-success' : 'bg-failed/10 text-failed';
+            let iconType = action === 'approve' ? 'check' : 'x';
+            let btnClass = action === 'approve' ? 'bg-success hover:bg-success/90' : 'bg-failed hover:bg-failed/90';
+            let btnText = action === 'approve' ? 'Ya, Setujui' : 'Ya, Tolak';
+
+            if (action === 'approve' && type.toLowerCase() === 'cuti' && requestedDays > remainingQuota) {
+                iconClass = 'bg-pending/10 text-pending';
+                iconType = 'alert-triangle';
+                btnClass = 'bg-pending hover:bg-pending/90';
+                title = 'Peringatan Kuota Cuti';
+                desc = `<span class="text-failed font-bold">Perhatian:</span> Cuti yang diajukan (<span class="font-bold">${requestedDays} Hari</span>) melebihi sisa kuota karyawan saat ini (<span class="font-bold">${remainingQuota} Hari</span>).<br><br>Sisa cuti karyawan ini akan menjadi minus. Tetap setujui?`;
+            }
+
+            let inputHtml = action === 'reject' ? `
+                <div class="mt-4 text-left">
+                    <label class="block text-[10px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Alasan Penolakan</label>
+                    <textarea id="rejectionNote" rows="3" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-failed focus:ring-1 focus:ring-failed transition text-xs text-gray-800" placeholder="Wajib diisi..."></textarea>
+                </div>
+            ` : '';
+
+            confirmContent.innerHTML = `
+                <div class="text-center">
+                    <div class="w-12 h-12 rounded-full ${iconClass} mx-auto flex items-center justify-center mb-4">
+                        <i data-lucide="${iconType}" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">${title}</h3>
+                    <p class="text-xs text-gray-500 mt-1 leading-relaxed">${desc}</p>
+                    
+                    ${inputHtml}
+                    
+                    <div class="flex gap-3 mt-8">
+                        <button onclick="closeConfirm()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Batal</button>
+                        <button onclick="submitAction(${id}, '${action}')" class="flex-1 py-3 ${btnClass} text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">${btnText}</button>
+                    </div>
+                </div>
+            `;
+            
+            confirmModal.classList.remove('hidden');
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                confirmOverlay.classList.remove('opacity-0');
+                confirmCard.classList.remove('translate-y-full', 'md:scale-95', 'md:opacity-0');
+                confirmCard.classList.add('translate-y-0', 'md:scale-100', 'md:opacity-100');
+            }, 10);
+        }, 300);
+    }
+
     window.deleteLeave = function(id) {
         confirmContent.innerHTML = `
             <div class="text-center">
                 <div class="w-12 h-12 rounded-full bg-failed/10 text-failed mx-auto flex items-center justify-center mb-4">
                     <i data-lucide="trash-2" class="w-6 h-6"></i>
                 </div>
-                <h3 class="text-lg font-bold text-gray-800">Batalkan Pengajuan</h3>
-                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin membatalkan dan menghapus pengajuan ini secara permanen?</p>
+                <h3 class="text-lg font-bold text-gray-800">Hapus Pengajuan</h3>
+                <p class="text-xs text-gray-500 mt-1">Apakah Anda yakin ingin menghapus data ini secara permanen dari sistem?</p>
                 
                 <div class="flex gap-3 mt-8">
-                    <button onclick="closeConfirm()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Kembali</button>
-                    <button onclick="submitDelete(${id})" class="flex-1 py-3 bg-failed hover:bg-failed/90 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">Ya, Hapus</button>
+                    <button onclick="closeConfirm()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition active:scale-95">Batal</button>
+                    <button onclick="submitAction(${id}, 'delete')" class="flex-1 py-3 bg-failed hover:bg-failed/90 text-white rounded-xl text-sm font-bold transition shadow-sm active:scale-95">Ya, Hapus</button>
                 </div>
             </div>
         `;
@@ -455,10 +586,33 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
         setTimeout(() => { confirmModal.classList.add('hidden'); }, 300);
     }
 
-    window.submitDelete = function(id) {
+    window.submitAction = function(id, action) {
+        let note = '';
+        if (action === 'reject') {
+            const noteInput = document.getElementById('rejectionNote');
+            note = noteInput.value.trim();
+            
+            if (!note) {
+                if(typeof window.showToast === 'function') window.showToast('Alasan penolakan wajib diisi!', 'warning');
+                noteInput.classList.add('border-failed', 'ring-failed', 'bg-failed/5');
+                noteInput.focus();
+                
+                setTimeout(() => {
+                    document.querySelectorAll('div').forEach(t => {
+                        if(t.id.toLowerCase().includes('toast') || t.className.toLowerCase().includes('toast')) {
+                            t.style.setProperty('z-index', '999999', 'important');
+                        }
+                    });
+                }, 10);
+                
+                return;
+            }
+        }
+
         const formData = new FormData();
-        formData.append('ajax_action', 'delete');
+        formData.append('ajax_action', action);
         formData.append('id', id);
+        if (note) formData.append('note', note);
 
         fetch(window.location.href, { method: 'POST', body: formData })
         .then(res => res.json())

@@ -63,6 +63,26 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
             <i data-lucide="briefcase" class="w-4 h-4"></i> Proyek
         </a>
 
+        <!-- ================= APPROVAL MENU ================= -->
+        <?php if (in_array($sb_role_name, ['superadmin', 'admin', 'hr', 'manager', 'finance'])): ?>
+        <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Approval Menu</div>
+        
+        <?php if (in_array($sb_role_name, ['superadmin', 'admin', 'hr', 'manager'])): ?>
+        <a href="<?= $base_url ?? '' ?>/approval_leave" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'approval_leave') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="calendar-check" class="w-4 h-4"></i> Approval Izin
+        </a>
+        <a href="<?= $base_url ?? '' ?>/approval_overtime" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'approval_overtime') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="clock" class="w-4 h-4"></i> Approval Lembur
+        </a>
+        <?php endif; ?>
+
+        <?php if (in_array($sb_role_name, ['superadmin', 'admin', 'hr', 'manager', 'finance'])): ?>
+        <a href="<?= $base_url ?? '' ?>/approval_reimbursement" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'approval_reimbursement') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
+            <i data-lucide="file-check-2" class="w-4 h-4"></i> Approval Reimburse
+        </a>
+        <?php endif; ?>
+        <?php endif; ?>
+
         <!-- ================= ADMIN MENU ================= -->
         <?php if (in_array($sb_role_name, ['admin', 'superadmin'])): ?>
         <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Admin Menu</div>
@@ -102,9 +122,6 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Rekap Absensi
         </a>
         <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
-            <i data-lucide="check-square" class="w-4 h-4"></i> Approval Cuti
-        </a>
-        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
             <i data-lucide="hand-coins" class="w-4 h-4"></i> Kasbon Karyawan
         </a>
         <?php endif; ?>
@@ -114,9 +131,6 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
         <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Manager Menu</div>
         <a href="<?= $base_url ?? '' ?>/review" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= ($current_page == 'review') ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
             <i data-lucide="star-half" class="w-4 h-4"></i> Employee Review
-        </a>
-        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
-            <i data-lucide="check-circle" class="w-4 h-4"></i> Approval Tim
         </a>
         <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-500 hover:bg-gray-50 hover:text-primary rounded-xl text-sm font-medium transition">
             <i data-lucide="pie-chart" class="w-4 h-4"></i> Laporan Proyek
@@ -131,9 +145,6 @@ $sb_role_name = strtolower($_SESSION['role'] ?? '');
         <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Finance Menu</div>
         <a href="<?= $base_url ?? '' ?>/payslips" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= (in_array($current_page, ['payslips', 'payslips_detail'])) ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
             <i data-lucide="banknote" class="w-4 h-4"></i> Daftar Payroll
-        </a>
-        <a href="<?= $base_url ?? '' ?>/reimbursement" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition <?= (in_array($current_page, ['reimbursement', 'reimbursement_add'])) ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50 hover:text-primary' ?>">
-            <i data-lucide="receipt" class="w-4 h-4"></i> Approval Klaim
         </a>
         <?php endif; ?>
 
