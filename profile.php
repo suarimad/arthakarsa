@@ -89,7 +89,7 @@ try {
 // Set URL Profile Avatar Utama (PERBAIKAN iOS PWA: Tambahkan base_url)
 $profile_avatar_url = !empty($user_avatar) 
     ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($user_avatar) 
-    : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($user_name);
+    : "https://api.dicebear.com/10.x/shadows/svg?seed=" . urlencode($user_name);
 
 // Set variabel untuk dikonsumsi komponen header.php
 $user_role = $user_pos; 

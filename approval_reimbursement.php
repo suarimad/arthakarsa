@@ -240,7 +240,7 @@ echo '<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js
                                         <?php foreach($reimbursement_requests as $rm): 
                                             $safe_name = htmlspecialchars($rm['employee_name'] ?? 'Unknown');
                                             $dept_name = htmlspecialchars($rm['department_name'] ?? '-');
-                                            $avatar = !empty($rm['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($rm['avatar']) : "https://api.dicebear.com/9.x/shadows/svg?seed=" . urlencode($safe_name);
+                                            $avatar = !empty($rm['avatar']) ? ($base_url ?? '') . "/assets/img/avatars/" . htmlspecialchars($rm['avatar']) : "https://api.dicebear.com/10.x/shadows/svg?seed=" . urlencode($safe_name);
                                             
                                             $date_str = date('d M Y', strtotime($rm['date']));
                                             $category = htmlspecialchars($rm['type'] ?? 'Lainnya');
